@@ -1,0 +1,27 @@
+import axios from "axios";
+import { getToken } from "../utils/tokenStorage";
+
+// ⚠️ Thay bằng IP LAN của bạn
+const axiosClient = axios.create({
+  baseURL: "http://192.168.110.203:4000",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  timeout: 5000,
+});
+
+axiosClient.interceptors.request.use(async (config) => {
+  const token = await getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+axiosClient.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    console.log("❌ API Error:", err.response?.status, err.response?.data);
+    return Promise.reject(err);
+  }
+);
+
+export default axiosClient;

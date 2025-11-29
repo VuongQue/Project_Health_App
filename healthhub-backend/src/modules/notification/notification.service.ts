@@ -18,7 +18,7 @@ export class NotificationService {
 
   async getMyNotifications(user: User) {
     return this.notiRepo.find({
-      where: { user },
+      where: { user: { id: user.id } },
       order: { createdAt: 'DESC' },
     });
   }
@@ -29,4 +29,10 @@ export class NotificationService {
     noti.isRead = true;
     return this.notiRepo.save(noti);
   }
+  async getUnreadCount(user: User) {
+  return this.notiRepo.count({
+    where: { user: { id: user.id }, isRead: false },
+  });
+
+}
 }

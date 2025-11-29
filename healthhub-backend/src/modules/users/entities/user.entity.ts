@@ -13,6 +13,9 @@ export class User {
   @Column({ length: 100 })
   fullName: string;
 
+  @Column({ unique: true, nullable: true })
+  username: string;
+
   @Column({ unique: true })
   email: string;
 
@@ -27,6 +30,13 @@ export class User {
 
   @Column({ nullable: true })
   avatarUrl: string;
+
+  @Column({ default: 1 })
+  level: number;
+
+  @Column({ default: 0 })
+  points: number;
+
 
   @CreateDateColumn()
   createdAt: Date;

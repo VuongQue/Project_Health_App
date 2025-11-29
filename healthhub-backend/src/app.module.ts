@@ -13,6 +13,8 @@ import { EventModule } from './modules/event/event.module';
 import { ChallengeModule } from './modules/challenge/challenge.module';
 import { AchievementModule } from './modules/achievement/achievement.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
+import { FriendModule } from './modules/friend/friend.module';
 
 @Module({
   imports: [
@@ -45,6 +47,8 @@ import { NotificationModule } from './modules/notification/notification.module';
     AchievementModule,
 
     NotificationModule,
+    CloudinaryModule,
+    FriendModule,
   ],
 })
 export class AppModule {}

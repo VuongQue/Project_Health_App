@@ -2,7 +2,6 @@
   "expo": {
     "name": "healthhub-app",
     "slug": "healthhub-app",
-   
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -39,14 +38,19 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experimental": {
       "reactNativeFabricEnabled": false
     },
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": true,
+      "router": {
+        "stripGroupSegments": true
+      }
     }
+    
   }
 }

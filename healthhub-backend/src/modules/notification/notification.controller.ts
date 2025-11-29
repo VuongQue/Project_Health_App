@@ -16,4 +16,9 @@ export class NotificationController {
   markRead(@Param('id') id: number) {
     return this.notiService.markAsRead(id);
   }
+  @Get('unread-count')
+  async getUnread(@Req() req) {
+  const count = await this.notiService.getUnreadCount(req.user);
+  return { count: count ?? 0 };
+}
 }

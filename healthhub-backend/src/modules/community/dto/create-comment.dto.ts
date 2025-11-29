@@ -5,4 +5,5 @@ export class CreateCommentDto {
   @ApiProperty({ example: 'Tuyệt vời quá, cố lên nhé!' })
   @IsString()
   text: string;
+  parentId?: string;
 }

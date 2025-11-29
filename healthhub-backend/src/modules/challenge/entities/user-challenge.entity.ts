@@ -18,4 +18,11 @@ export class UserChallenge {
 
   @CreateDateColumn()
   joinedAt: Date;
+
+  @Column({ type: 'int', default: 0 })
+  completedDays: number;
+
+  @Column({ type: 'date', nullable: true })
+  lastCompletedDate: string | null;
+
 }
