@@ -11,6 +11,8 @@ import {
 import { Search, MessageCircle, UserPlus } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { friendApi } from "@/src/api/friendApi";
+import { chatApi } from "@/src/api/chatApi";
+import { router } from "expo-router";
 
 export default function FriendsPage() {
   const [search, setSearch] = useState("");
@@ -37,7 +39,6 @@ export default function FriendsPage() {
       setFriends(fList);
       setSuggest(suggestList);
       setPending(pendingList);
-
     } catch (err) {
       console.log("Load friends failed:", err);
     } finally {
@@ -62,7 +63,7 @@ export default function FriendsPage() {
     }
   };
 
-  /** SEND FRIEND REQUEST */
+  /** ADD FRIEND */
   const onAddFriend = async (targetId: number) => {
     try {
       await friendApi.sendRequest(targetId);
@@ -80,6 +81,25 @@ export default function FriendsPage() {
       loadData();
     } catch (err) {
       alert("Failed to respond");
+    }
+  };
+
+  /** ----------------------------------------------
+   *  OPEN CHAT WITH FRIEND (FINAL)
+   * ---------------------------------------------- */
+  const openChat = async (friend: any) => {
+    try {
+      const res = await chatApi.openChat({
+        receiverId: String(friend.id),
+      });
+
+      router.push({
+        pathname: "/(tabs)/(community)/chat/[id]",
+        params: { id: res.roomId },
+      });
+    } catch (err) {
+      console.log("Open chat error:", err);
+      alert("Failed to open chat");
     }
   };
 
@@ -115,57 +135,13 @@ export default function FriendsPage() {
         </View>
       </View>
 
-      {/* Pending Requests */}
-      {pending.length > 0 && (
-        <View style={{ marginBottom: 30 }}>
-          <Text style={styles.sectionTitle}>Pending Requests</Text>
-
-          {pending.map((req) => (
-            <View key={req.id} style={styles.card}>
-              <LinearGradient
-                colors={["#fb923c", "#f97316"]}
-                style={styles.avatar}
-              >
-                <Text style={{ fontSize: 26 }}>⏳</Text>
-              </LinearGradient>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{req.fromUser.fullName}</Text>
-                <Text style={styles.username}>@{req.fromUser.username}</Text>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.addBtn, { backgroundColor: "#22c55e" }]}
-                onPress={() => onRespond(req.id, true)}
-              >
-                <Text style={styles.addText}>Accept</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.addBtn, { backgroundColor: "#ef4444", marginLeft: 6 }]}
-                onPress={() => onRespond(req.id, false)}
-              >
-                <Text style={styles.addText}>Reject</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      )}
-
       {/* Your Friends */}
       <View style={{ marginBottom: 30 }}>
         <Text style={styles.sectionTitle}>Your Friends</Text>
 
-        {friends.length === 0 && (
-          <Text style={{ color: "#64748b" }}>You have no friends yet.</Text>
-        )}
-
         {friends.map((u) => (
           <View key={u.id} style={styles.card}>
-            <LinearGradient
-              colors={["#3b82f6", "#8b5cf6"]}
-              style={styles.avatar}
-            >
+            <LinearGradient colors={["#3b82f6", "#8b5cf6"]} style={styles.avatar}>
               <Text style={{ fontSize: 26 }}>😊</Text>
             </LinearGradient>
 
@@ -174,7 +150,7 @@ export default function FriendsPage() {
               <Text style={styles.username}>@{u.username}</Text>
             </View>
 
-            <TouchableOpacity style={styles.msgBtn}>
+            <TouchableOpacity style={styles.msgBtn} onPress={() => openChat(u)}>
               <MessageCircle size={20} color="#3b82f6" />
             </TouchableOpacity>
           </View>
@@ -187,10 +163,7 @@ export default function FriendsPage() {
 
         {suggest.map((u) => (
           <View key={u.id} style={styles.card}>
-            <LinearGradient
-              colors={["#3b82f6", "#8b5cf6"]}
-              style={styles.avatar}
-            >
+            <LinearGradient colors={["#3b82f6", "#8b5cf6"]} style={styles.avatar}>
               <Text style={{ fontSize: 26 }}>👤</Text>
             </LinearGradient>
 
@@ -213,13 +186,11 @@ export default function FriendsPage() {
   );
 }
 
-// -------------------- STYLES --------------------
+/* -------------------- STYLES -------------------- */
 const styles = StyleSheet.create({
   loading: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-    justifyContent: "center",
-    alignItems: "center",
+    flex: 1, backgroundColor: "#0f172a",
+    justifyContent: "center", alignItems: "center"
   },
   container: {
     flex: 1,

@@ -15,7 +15,7 @@ import { AchievementModule } from './modules/achievement/achievement.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
 import { FriendModule } from './modules/friend/friend.module';
-import { ChatModule } from './chat/chat.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [

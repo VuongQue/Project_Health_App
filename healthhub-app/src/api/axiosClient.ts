@@ -1,7 +1,7 @@
 import axios from "axios";
 import { getToken } from "../utils/tokenStorage";
 
-// ⚠️ Thay bằng IP LAN của bạn
+
 const axiosClient = axios.create({
   baseURL: "http://192.168.110.203:4000",
   headers: {

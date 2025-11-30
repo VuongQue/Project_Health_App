@@ -17,6 +17,7 @@ import { PostCard } from "@/components/community/PostCard";
 
 import { communityApi } from "@/src/api/communityApi";
 import { StoryItem, PostItem } from "@/src/types/community";
+import { router } from "expo-router";
 
 export default function CommunityFeed() {
   const [stories, setStories] = useState<StoryItem[]>([]);
@@ -120,7 +121,10 @@ export default function CommunityFeed() {
               <Plus color="#94a3b8" size={20} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.iconButton}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => router.push("(tabs)/(community)/chat" as any)}
+            >
               <MessageCircle color="#94a3b8" size={20} />
               <View style={styles.badge} />
             </TouchableOpacity>
