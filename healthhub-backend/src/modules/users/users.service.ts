@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In, Not, ILike } from 'typeorm';
 import { User } from './entities/user.entity';
 
 @Injectable()
@@ -52,5 +52,29 @@ export class UsersService {
       email: user.email,
     };
   }
+
+  async getUsersExclude(ids: number[]) {
+    console.log("[UsersService][getUsersExclude] exclude ids =", ids);
+    const users = await this.usersRepo.find({
+      where: { id: Not(In(ids)) },
+    });
+    console.log("[UsersService][getUsersExclude] result count =", users.length);
+    return users;
+  }
+
+  async searchUsers(keyword: string) {
+    console.log("[UsersService][searchUsers] keyword =", keyword);
+    const users = await this.usersRepo.find({
+      where: [
+        { fullName: ILike(`%${keyword}%`) },
+        { email: ILike(`%${keyword}%`) },
+      ],
+    });
+    console.log("[UsersService][searchUsers] result count =", users.length);
+    return users;
+  }
+
+
+    
 
 }

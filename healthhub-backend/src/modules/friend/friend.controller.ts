@@ -1,47 +1,52 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import { FriendService } from "./friend.service";
-import { SendFriendRequestDto } from "./dto/send-request.dto";
-import { RespondFriendRequestDto } from "./dto/respond-request.dto";
+import { AuthGuard } from "@nestjs/passport";
 
+@UseGuards(AuthGuard("jwt"))
 @Controller("friends")
 export class FriendController {
   constructor(private friendService: FriendService) {}
 
   @Post("request")
-  sendFriendRequest(@Body() dto: SendFriendRequestDto) {
-    return this.friendService.sendRequest(dto);
+  sendFriendRequest(@Req() req, @Body("toUserId") toUserId: number) {
+    return this.friendService.sendRequest(req.user.userId, toUserId);
   }
 
   @Post("respond")
-  respondRequest(@Body() dto: RespondFriendRequestDto) {
-    return this.friendService.respondRequest(dto);
-  }
-
-  @Get("list/:userId")
-  getFriends(@Param("userId") userId: number) {
-    return this.friendService.getFriends(userId);
-  }
-
-  @Get("pending/:userId")
-  pending(@Param("userId") userId: number) {
-    return this.friendService.getPendingRequests(userId);
-  }
-
-  // @Get("search")
-  // search(@Query("q") q: string) {
-  //   return this.friendService.search(q);
-  // }
-
-  // @Get("suggest/:userId")
-  // suggest(@Param("userId") userId: number) {
-  //   return this.friendService.suggestFriends(userId);
-  // }
-
-  @Post("unfriend/:userId/:targetId")
-  unfriend(
-    @Param("userId") userId: number,
-    @Param("targetId") targetId: number,
+  respondRequest(
+    @Req() req,
+    @Body("requestId") requestId: string,
+    @Body("accept") accept: boolean,
   ) {
-    return this.friendService.unfriend(userId, targetId);
+    return this.friendService.respondRequest(req.user.userId, requestId, accept);
+  }
+
+  @Get("list")
+  getFriends(@Req() req) {
+    return this.friendService.getFriends(req.user.userId);
+  }
+
+  @Get("pending")
+  getPending(@Req() req) {
+    return this.friendService.getPendingRequests(req.user.userId);
+  }
+
+  @Get("suggest")
+  suggest(@Req() req) {
+    return this.friendService.suggestFriends(req.user.userId);
+  }
+
+  @Post("unfriend/:targetId")
+  unfriend(@Req() req, @Param("targetId") targetId: number) {
+    return this.friendService.unfriend(req.user.userId, targetId);
   }
 }
+

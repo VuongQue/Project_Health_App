@@ -11,39 +11,33 @@ import {
 import { Search, MessageCircle, UserPlus } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { friendApi } from "@/src/api/friendApi";
-import { getToken } from "@/src/utils/tokenStorage";
 
 export default function FriendsPage() {
   const [search, setSearch] = useState("");
   const [friends, setFriends] = useState<any[]>([]);
   const [suggest, setSuggest] = useState<any[]>([]);
-  const [myId, setMyId] = useState<number | null>(null);
+  const [pending, setPending] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Lấy userId từ token JWT
+  /** LOAD DATA */
   useEffect(() => {
-    (async () => {
-      const token = await getToken();
-      if (!token) return;
-
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      setMyId(payload.id);
-
-      loadData(payload.id);
-    })();
+    loadData();
   }, []);
 
-  const loadData = async (userId: number) => {
+  const loadData = async () => {
     try {
       setLoading(true);
 
-      const [fList, suggestList] = await Promise.all([
-        friendApi.getFriends(userId),
-        friendApi.suggest(userId),
+      const [fList, suggestList, pendingList] = await Promise.all([
+        friendApi.getFriends(),
+        friendApi.suggest(),
+        friendApi.getPending(),
       ]);
 
       setFriends(fList);
       setSuggest(suggestList);
+      setPending(pendingList);
+
     } catch (err) {
       console.log("Load friends failed:", err);
     } finally {
@@ -51,11 +45,12 @@ export default function FriendsPage() {
     }
   };
 
+  /** SEARCH */
   const onSearch = async (text: string) => {
     setSearch(text);
 
     if (text.trim() === "") {
-      loadData(myId!);
+      loadData();
       return;
     }
 
@@ -67,17 +62,28 @@ export default function FriendsPage() {
     }
   };
 
+  /** SEND FRIEND REQUEST */
   const onAddFriend = async (targetId: number) => {
     try {
-      await friendApi.sendRequest(myId!, targetId);
+      await friendApi.sendRequest(targetId);
       alert("Friend request sent!");
+      loadData();
     } catch (err) {
-      console.log(err);
       alert("Failed to send request");
     }
   };
 
-  if (loading || myId === null) {
+  /** ACCEPT / REJECT FRIEND REQUEST */
+  const onRespond = async (requestId: string, accept: boolean) => {
+    try {
+      await friendApi.respond(requestId, accept);
+      loadData();
+    } catch (err) {
+      alert("Failed to respond");
+    }
+  };
+
+  if (loading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color="#3b82f6" />
@@ -108,6 +114,43 @@ export default function FriendsPage() {
           />
         </View>
       </View>
+
+      {/* Pending Requests */}
+      {pending.length > 0 && (
+        <View style={{ marginBottom: 30 }}>
+          <Text style={styles.sectionTitle}>Pending Requests</Text>
+
+          {pending.map((req) => (
+            <View key={req.id} style={styles.card}>
+              <LinearGradient
+                colors={["#fb923c", "#f97316"]}
+                style={styles.avatar}
+              >
+                <Text style={{ fontSize: 26 }}>⏳</Text>
+              </LinearGradient>
+
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{req.fromUser.fullName}</Text>
+                <Text style={styles.username}>@{req.fromUser.username}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: "#22c55e" }]}
+                onPress={() => onRespond(req.id, true)}
+              >
+                <Text style={styles.addText}>Accept</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: "#ef4444", marginLeft: 6 }]}
+                onPress={() => onRespond(req.id, false)}
+              >
+                <Text style={styles.addText}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Your Friends */}
       <View style={{ marginBottom: 30 }}>
