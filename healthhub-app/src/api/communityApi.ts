@@ -30,8 +30,16 @@ export const communityApi = {
     },
 
 
-  createPost: (data: { content: string; media?: string[] }) =>
-    axiosClient.post(`/posts`, data),
+  createPost: async (data: { content: string; media?: string[] }) => {
+    const payload = {
+      content: data.content,
+      media: Array.isArray(data.media) ? data.media : [], // nếu undefined → []
+    };
+
+    const res = await axiosClient.post(`/posts`, payload);
+    return res.data;
+  },  
+
 
   toggleLike: (postId: string) =>
     axiosClient.post(`/posts/${postId}/like`),
@@ -48,4 +56,16 @@ export const communityApi = {
     });
     return res.data;
   },
+
+  uploadMultiple: async (uris: string[]) => {
+    const results: string[] = [];
+
+    for (const uri of uris) {
+      const url = await mediaApi.uploadFile(uri);
+      results.push(url);
+    }
+
+    return results;
+  },
+
 };

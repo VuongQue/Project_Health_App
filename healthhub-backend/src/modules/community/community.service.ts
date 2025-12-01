@@ -119,11 +119,16 @@ export class CommunityService {
 
   // GET COMMENTS
   async getComments(postId: string) {
-    return this.commentModel
+    const list = await this.commentModel
       .find({ postId: new Types.ObjectId(postId) })
       .sort({ createdAt: 1 })
       .lean();
+
+    console.log("COMMENTS FOR POST", postId, list);
+
+    return list;
   }
+
 
   // STORIES
   async getStories(userId: string) {

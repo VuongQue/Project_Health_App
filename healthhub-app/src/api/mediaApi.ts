@@ -22,4 +22,6 @@ export const mediaApi = {
 
     return res.data.secure_url || res.data.url;
   },
+
+  
 };

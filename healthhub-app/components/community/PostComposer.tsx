@@ -6,12 +6,12 @@ import {
   Text,
   StyleSheet,
   Image,
+  ScrollView,
 } from "react-native";
 import { ImageIcon, Send } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 
 import { communityApi } from "@/src/api/communityApi";
-import { mediaApi } from "@/src/api/mediaApi";
 
 interface Props {
   onPosted: () => void;
@@ -19,54 +19,49 @@ interface Props {
 
 export function PostComposer({ onPosted }: Props) {
   const [text, setText] = useState("");
-  const [image, setImage] = useState<any>(null);
+  const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Pick image — FIXED for Web + Mobile
+  // Pick MULTIPLE images
   const pickImage = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
       quality: 1,
     });
 
     if (!res.canceled) {
-      setImage(res.assets[0]);
+      setImages([...images, ...res.assets]);
     }
   };
 
   // Upload + Create Post
   const handlePost = async () => {
     if (loading) return;
+    if (!text.trim() && images.length === 0) return;
+
     setLoading(true);
-
     try {
-      let mediaUrl: string[] = [];
+      let mediaUrls: string[] = [];
 
-      // UPLOAD IMAGE → Cloudinary via backend
-      if (!image?.uri) {
-        console.log("NO URI FOUND", image);
-        return;
-        }
-
-        if (image?.uri) {
-            const uploadedUrl = await mediaApi.uploadFile(image.uri);
-            console.log("UPLOAD RESPONSE:", uploadedUrl);
-            mediaUrl.push(uploadedUrl);
-            }
-
-
+      // UPLOAD IF ANY IMAGE
+      if (images.length > 0) {
+        const uris = images.map((img) => img.uri);
+        mediaUrls = await communityApi.uploadMultiple(uris);
+      }
 
       // CREATE POST
       await communityApi.createPost({
         content: text,
-        media: mediaUrl,
+        media: mediaUrls,
       });
 
+      // RESET
       setText("");
-      setImage(null);
+      setImages([]);
       onPosted();
     } catch (error) {
-      console.log("Post create error:", error);
+      console.log("Create post error:", error);
     } finally {
       setLoading(false);
     }
@@ -85,11 +80,16 @@ export function PostComposer({ onPosted }: Props) {
       />
 
       {/* Image Preview */}
-      {image && (
-        <Image
-          source={{ uri: image.uri }}
-          style={{ width: "100%", height: 180, borderRadius: 12 }}
-        />
+      {images.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {images.map((img, idx) => (
+            <Image
+              key={idx}
+              source={{ uri: img.uri }}
+              style={styles.preview}
+            />
+          ))}
+        </ScrollView>
       )}
 
       {/* Actions */}
@@ -146,5 +146,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     alignItems: "center",
+  },
+  preview: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    marginRight: 10,
   },
 });

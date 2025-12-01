@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  ScrollView,
+} from "react-native";
 import { Heart, MessageSquare, Share2 } from "lucide-react-native";
 import { PostItem } from "@/src/types/community";
 import { communityApi } from "@/src/api/communityApi";
@@ -12,6 +19,7 @@ interface Props {
 
 export function PostCard({ post, refresh }: Props) {
   const [liking, setLiking] = useState(false);
+  const [showComments, setShowComments] = useState(false);
 
   const handleLike = async () => {
     if (liking) return;
@@ -35,24 +43,32 @@ export function PostCard({ post, refresh }: Props) {
 
         <View>
           <Text style={styles.author}>{post.userId.name}</Text>
-          <Text style={styles.time}>{new Date(post.createdAt).toDateString()}</Text>
+          <Text style={styles.time}>
+            {new Date(post.createdAt).toDateString()}
+          </Text>
         </View>
       </View>
 
       {/* CONTENT */}
       <Text style={styles.content}>{post.content}</Text>
 
+      {/* MULTI IMAGE SUPPORT */}
       {post.media && post.media.length > 0 && (
-        <Image
-            source={{ uri: post.media[0] }}
-            style={{
-            width: "100%",
-            height: 200,
-            borderRadius: 12,
-            marginBottom: 16,
-            }}
-        />
-        )}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: 16 }}
+        >
+          {post.media.map((url, idx) => (
+            <Image
+              key={idx}
+              source={{ uri: url }}
+              style={styles.mediaImage}
+              resizeMode="cover"
+            />
+          ))}
+        </ScrollView>
+      )}
 
       {/* ACTIONS */}
       <View style={styles.actions}>
@@ -61,7 +77,10 @@ export function PostCard({ post, refresh }: Props) {
           <Text style={styles.actionText}>{post.likeCount}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => setShowComments(!showComments)}
+        >
           <MessageSquare size={18} color="#94a3b8" />
           <Text style={styles.actionText}>{post.commentCount}</Text>
         </TouchableOpacity>
@@ -71,14 +90,17 @@ export function PostCard({ post, refresh }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* COMMENT PREVIEW */}
-      {post.commentPreview?.map((c) => (
-        <Text key={c.id} style={styles.commentPreview}>
-          <Text style={{ color: "white" }}>{c.user.name}: </Text>
-          {c.text}
-        </Text>
-      ))}
-      <PostComments postId={post._id} />
+      {/* COMMENT PREVIEW (only if comments collapsed) */}
+      {!showComments &&
+        post.commentPreview?.map((c) => (
+          <Text key={c.id} style={styles.commentPreview}>
+            <Text style={{ color: "white" }}>{c.user.name}: </Text>
+            {c.text}
+          </Text>
+        ))}
+
+      {/* FULL COMMENT SECTION */}
+      {showComments && <PostComments postId={post._id} />}
     </View>
   );
 }
@@ -114,6 +136,12 @@ const styles = StyleSheet.create({
     color: "white",
     marginBottom: 16,
     lineHeight: 20,
+  },
+  mediaImage: {
+    width: 260,
+    height: 260,
+    borderRadius: 12,
+    marginRight: 12,
   },
   actions: {
     flexDirection: "row",
