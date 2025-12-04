@@ -1,25 +1,18 @@
 import axiosClient from "./axiosClient";
 
 export default {
-  // ✔ Weekly Summary
+  // =====================
+  // SUMMARY & PROGRESS
+  // =====================
   getWeekSummary: () => axiosClient.get("/fitness/logs/week"),
-
-  // ✔ Weekly Detail (UI cần cho 7 cái circle)
   getWeekDetail: () => axiosClient.get("/fitness/logs/week-detail"),
-
-
   getPlans: () => axiosClient.get("/fitness/plans"),
-
- 
   getMonthProgress: () => axiosClient.get("/fitness/progress/month"),
+  getSummary: () => axiosClient.get("/fitness/summary"),
 
-  // Quick start workout
-  startWorkout: (planId: number) =>
-    axiosClient.post(`/fitness/logs/start`, { planId }),
-
-  completeWorkout: (logId: number) =>
-    axiosClient.post(`/fitness/logs/complete/${logId}`),
-
+  // =====================
+  // WORKOUT CRUD
+  // =====================
   getWorkouts: (params?: {
     search?: string;
     muscleGroup?: string;
@@ -28,8 +21,40 @@ export default {
     maxKcal?: number;
   }) => axiosClient.get("/fitness/workouts", { params }),
 
-  getWorkoutById: (id: any) => axiosClient.get(`/fitness/workouts/${id}`),
-  logWorkout: (body: any) => axiosClient.post("/fitness/logs", body),
+  getWorkoutById: (id: number | string) =>
+    axiosClient.get(`/fitness/workouts/${id}`),
+
+  // =====================
+  // LOG WORKOUT
+  // =====================
+  logWorkout: (body: {
+    workoutId: number;
+    durationMin: number;
+    kcal: number;
+    note?: string;
+  }) => axiosClient.post("/fitness/logs", body),
+
+  // =====================
+  // QUICK START
+  // =====================
+  quickStart: () => axiosClient.post("/fitness/quick-start"),
+
+  // =====================
+  // WORKOUT SESSION (nếu bạn bật phần này)
+  // =====================
+  startSession: (workoutId: number) =>
+  axiosClient.post(`/fitness/session/start/${workoutId}`),
+
+  getActiveSession: (workoutId: number) =>
+    axiosClient.get(`/fitness/session/${workoutId}`),
+
+  updateSessionIndex: (sessionId: number, index: number) =>
+    axiosClient.post(`/fitness/session/update/${sessionId}`, { index }),
+
+  completeSession: (sessionId: number, body: { seconds: number; calories: number }) =>
+    axiosClient.post(`/fitness/session/complete/${sessionId}`, body),
 
 
+  getSessionDetail: (sessionId: number) =>
+    axiosClient.get(`/fitness/session/detail/${sessionId}`),
 };

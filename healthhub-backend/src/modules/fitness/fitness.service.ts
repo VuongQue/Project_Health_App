@@ -1,39 +1,65 @@
-// fitness.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Between, Repository } from 'typeorm';
+
 import { Workout } from './entities/workout.entity';
 import { WorkoutLog } from './entities/workout-log.entity';
 import { WorkoutPlan } from './entities/workout-plan.entity';
+import { WorkoutExercise } from './entities/workout-exercise.entity';
+
 import { CreateWorkoutDto } from './dto/create-workout.dto';
 import { CreateWorkoutLogDto } from './dto/create-workout-log.dto';
 import { CreateWorkoutPlanDto } from './dto/create-workout-plan.dto';
-import { User } from '../users/entities/user.entity';
-import { UsersService } from '../users/users.service';
 import { WorkoutFilterDto } from './dto/workout-filter.dto';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { WorkoutSession } from './entities/workout-session.entity';
+
+import { UsersService } from '../users/users.service';
+import { User } from '../users/entities/user.entity';
+
+import {
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+} from 'date-fns';
 
 export interface WeeklyDay {
   day: string;
   completed: boolean;
 }
+
 @Injectable()
 export class FitnessService {
   constructor(
-    @InjectRepository(Workout) private workoutRepo: Repository<Workout>,
-    @InjectRepository(WorkoutLog) private logRepo: Repository<WorkoutLog>,
-    @InjectRepository(WorkoutPlan) private planRepo: Repository<WorkoutPlan>,
+    @InjectRepository(Workout)
+    private workoutRepo: Repository<Workout>,
+
+    @InjectRepository(WorkoutExercise)
+    private exerciseRepo: Repository<WorkoutExercise>,
+
+    @InjectRepository(WorkoutLog)
+    private logRepo: Repository<WorkoutLog>,
+
+    @InjectRepository(WorkoutPlan)
+    private planRepo: Repository<WorkoutPlan>,
+
+    @InjectRepository(WorkoutSession)
+    private sessionRepo: Repository<WorkoutSession>,
+
+
     private usersService: UsersService,
   ) {}
 
-  // ============================================
-  // WORKOUT CRUD
-  // ============================================
+  // ======================================================
+  // WORKOUT LIST + FILTER
+  // ======================================================
   async findAllWorkouts(filter?: WorkoutFilterDto) {
-    const qb = this.workoutRepo.createQueryBuilder('w');
+    const qb = this.workoutRepo
+      .createQueryBuilder('w')
+      .leftJoinAndSelect('w.exercises', 'ex');
 
     if (filter?.search) {
-      qb.andWhere('w.title LIKE :search', { search: `%${filter.search}%` });
+      qb.andWhere('w.title LIKE :s', { s: `%${filter.search}%` });
     }
 
     if (filter?.muscleGroup) {
@@ -45,11 +71,7 @@ export class FitnessService {
     }
 
     if (filter?.minKcal) {
-      qb.andWhere('w.kcalPerMin >= :minKcal', { minKcal: filter.minKcal });
-    }
-
-    if (filter?.maxKcal) {
-      qb.andWhere('w.kcalPerMin <= :maxKcal', { maxKcal: filter.maxKcal });
+      qb.andWhere('w.kcalPerMin >= :min', { min: filter.minKcal });
     }
 
     qb.orderBy('w.createdAt', 'DESC');
@@ -57,21 +79,63 @@ export class FitnessService {
     return qb.getMany();
   }
 
+  // ======================================================
+  // CREATE WORKOUT + EXERCISES
+  // ======================================================
   async createWorkout(dto: CreateWorkoutDto) {
-    const workout = this.workoutRepo.create(dto);
-    return this.workoutRepo.save(workout);
+    const workout = this.workoutRepo.create({
+      title: dto.title,
+      level: dto.level,
+      muscleGroup: dto.muscleGroup,
+      videoUrl: dto.videoUrl,
+      kcalPerMin: dto.kcalPerMin,
+      description: dto.description,
+    });
+
+    const saved = await this.workoutRepo.save(workout);
+
+    // save exercises if exist
+    if (dto.exercises && dto.exercises.length > 0) {
+      for (let i = 0; i < dto.exercises.length; i++) {
+        await this.exerciseRepo.save({
+          workout: saved,
+          name: dto.exercises[i].name,
+          durationSec: dto.exercises[i].durationSec,
+          reps: dto.exercises[i].reps,
+          orderIndex: i,
+        });
+      }
+    }
+
+    return this.getWorkoutDetail(saved.id);
+  }
+
+  // ======================================================
+  // WORKOUT DETAIL (FULL INFO)
+  // ======================================================
+  async getWorkoutDetail(id: number) {
+
+    const w = await this.workoutRepo.findOne({
+      where: { id },
+      relations: ["exercises"],
+      order: { exercises: { orderIndex: "ASC" } },
+    });
+
+
+    if (!w) throw new NotFoundException("Workout not found");
+    return w;
   }
 
 
-  // ============================================
-  // LOG WORKOUT
-  // ============================================
+  // ======================================================
+  // LOG A WORKOUT
+  // ======================================================
   async logWorkout(jwtUser: any, dto: CreateWorkoutLogDto) {
     const user = await this.usersService.findByEmail(jwtUser.email);
-    if (!user) throw new Error('User not found');
+    if (!user) throw new NotFoundException('User not found');
 
     const workout = await this.workoutRepo.findOne({ where: { id: dto.workoutId } });
-    if (!workout) throw new NotFoundException(`Workout ${dto.workoutId} not found`);
+    if (!workout) throw new NotFoundException('Workout not found');
 
     const log = this.logRepo.create({
       user,
@@ -79,140 +143,112 @@ export class FitnessService {
       durationMin: dto.durationMin,
       kcal: dto.kcal,
       note: dto.note,
+      startedAt: new Date(),
     });
 
     return this.logRepo.save(log);
   }
 
-  getLogsByUser(user: User) {
+  // ======================================================
+  // USER LOG LIST
+  // ======================================================
+  async getLogsByUser(user: User) {
     return this.logRepo.find({
-      where: { user: { id: user.id }},
+      where: { user: { id: user.id } },
       relations: ['workout'],
-      order: { startedAt: 'DESC' }
+      order: { startedAt: 'DESC' },
     });
   }
 
-  // ============================================
-  // WEEKLY SUMMARY (UI: 8 workouts, 240 min,...)
-  // ============================================
+  // ======================================================
+  // WEEKLY SUMMARY
+  // ======================================================
   async getWeeklySummary(user: User) {
-  const logs = await this.getLogsByUser(user);
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const end = endOfWeek(new Date(), { weekStartsOn: 1 });
 
-  const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const end = endOfWeek(new Date(), { weekStartsOn: 1 });
-
-  const weeklyLogs = logs.filter(l => {
-    const d = new Date(l.startedAt);
-    return d >= start && d <= end;
-  });
-
-  // generate 7 days list
-  const days: WeeklyDay[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-
-    const count = await this.logRepo.count({
+    const logs = await this.logRepo.find({
       where: {
         user: { id: user.id },
-        startedAt: Between(
-          new Date(d.setHours(0,0,0,0)),
-          new Date(d.setHours(23,59,59,999))
-        ),
+        startedAt: Between(start, end),
       },
     });
 
-    days.push({
-      day: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i],
-      completed: count > 0,
-    });
-  }
-
-  return {
-    weekTotal: {
-      workouts: weeklyLogs.length,
-      calories: weeklyLogs.reduce((t, x) => t + x.kcal, 0),
-      minutes: weeklyLogs.reduce((t, x) => t + x.durationMin, 0),
-    },
-    days,
-  };
-}
-
-
-  // ============================================
-  // WEEKLY DETAIL (Mon → Sun)
-  // ============================================
-  async getWeeklyDetail(user: User) {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-
-    const week: WeeklyDay[] = [];
+    const days: WeeklyDay[] = [];
 
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
-      d.setDate(d.getDate() + i);
+      d.setDate(start.getDate() + i);
 
-      const count = await this.logRepo.count({
-        where: {
-          user: { id: user.id },
-          startedAt: Between(
-            new Date(d.setHours(0,0,0,0)),
-            new Date(d.setHours(23,59,59,999))
-          )
-        }
-      });
+      const count = logs.filter(
+        (l) => new Date(l.startedAt).toDateString() === d.toDateString(),
+      ).length;
 
-      week.push({
-        day: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i],
+      days.push({
+        day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
         completed: count > 0,
       });
     }
 
-  return week;
-}
+    return {
+      weekTotal: {
+        workouts: logs.length,
+        calories: logs.reduce((t, x) => t + x.kcal, 0),
+        minutes: logs.reduce((t, x) => t + x.durationMin, 0),
+      },
+      days,
+    };
+  }
 
+  // ======================================================
+  // WEEKLY DETAIL (UI)
+  // ======================================================
+  async getWeeklyDetail(user: User) {
+    return this.getWeeklySummary(user);
+  }
 
-  // ============================================
-  // MONTHLY PROGRESS (Cardio, Strength, Flex)
-  // ============================================
+  // ======================================================
+  // MONTHLY PROGRESS
+  // ======================================================
   async getMonthProgress(user: User) {
-  const start = startOfMonth(new Date());
-  const end = endOfMonth(new Date());
+    const start = startOfMonth(new Date());
+    const end = endOfMonth(new Date());
 
-  const logs = await this.logRepo.find({
-    where: {
-      user: { id: user.id },
-      startedAt: Between(start, end),
-    },
-    relations: ['workout'],
-  });
+    const logs = await this.logRepo.find({
+      where: {
+        user: { id: user.id },
+        startedAt: Between(start, end),
+      },
+      relations: ['workout'],
+    });
 
-  const result = {
-    cardio: { sessions: 0, target: 10, progress: 0 },
-    strength: { sessions: 0, target: 10, progress: 0 },
-    flex: { sessions: 0, target: 10, progress: 0 },
-  };
+    const result = {
+      cardio: { sessions: 0, target: 10, progress: 0 },
+      strength: { sessions: 0, target: 10, progress: 0 },
+      flex: { sessions: 0, target: 10, progress: 0 },
+    };
 
-  logs.forEach(log => {
-    const mg = log.workout.muscleGroup.toLowerCase();
-    if (['cardio','hiit'].includes(mg)) result.cardio.sessions++;
-    if (['strength','upper','lower','back','legs','chest'].includes(mg)) result.strength.sessions++;
-    if (['flexibility','yoga','stretch'].includes(mg)) result.flex.sessions++;
-  });
+    for (const log of logs) {
+      const mg = log.workout.muscleGroup.toLowerCase();
 
-  // auto progress %
-  Object.keys(result).forEach(key => {
-    result[key].progress = Math.floor(
-      (result[key].sessions / result[key].target) * 100
-    );
-  });
+      if (['cardio', 'hiit'].includes(mg)) result.cardio.sessions++;
+      if (['strength', 'upper', 'lower', 'legs', 'chest', 'back'].includes(mg))
+        result.strength.sessions++;
+      if (['flexibility', 'stretch', 'yoga'].includes(mg)) result.flex.sessions++;
+    }
 
-  return result;
-}
+    for (const key of Object.keys(result)) {
+      result[key].progress = Math.floor(
+        (result[key].sessions / result[key].target) * 100,
+      );
+    }
 
+    return result;
+  }
 
-  // ============================================
-  // UI SUMMARY (UI Fitness tổng hợp)
-  // ============================================
+  // ======================================================
+  // SUMMARY (UI FITNESS SCREEN)
+  // ======================================================
   async getSummary(user: User) {
     const week = await this.getWeeklySummary(user);
     const month = await this.getMonthProgress(user);
@@ -226,9 +262,9 @@ export class FitnessService {
     };
   }
 
-  // ============================================
-  // QUICK START WORKOUT – sử dụng workout mặc định
-  // ============================================
+  // ======================================================
+  // QUICK START DEFAULT WORKOUT
+  // ======================================================
   async quickStart(user: User) {
     const quick = await this.workoutRepo.findOne({
       where: { title: 'Quick Workout' },
@@ -236,26 +272,27 @@ export class FitnessService {
 
     if (!quick)
       throw new NotFoundException(
-        'Quick Workout not found — please insert it manually.'
+        'Quick Workout not found — please insert default workout.',
       );
 
     const log = this.logRepo.create({
       user,
       workout: quick,
-      kcal: 120,
       durationMin: 15,
-      note: 'Quick workout',
+      kcal: 120,
+      note: 'Quick workout session',
+      startedAt: new Date(),
     });
 
     return this.logRepo.save(log);
   }
 
-  // ============================================
-  // WORKOUT PLANS
-  // ============================================
+  // ======================================================
+  // WORKOUT PLAN
+  // ======================================================
   async createPlan(jwtUser: any, dto: CreateWorkoutPlanDto) {
     const user = await this.usersService.findByEmail(jwtUser.email);
-    if (!user) throw new Error('User not found');
+    if (!user) throw new NotFoundException('User not found');
 
     const plan = this.planRepo.create({ ...dto, user });
     return this.planRepo.save(plan);
@@ -263,14 +300,116 @@ export class FitnessService {
 
   getPlansByUser(user: User) {
     return this.planRepo.find({
-      where: { user: { id: user.id }},
-      order: { createdAt: 'DESC' }
+      where: { user: { id: user.id } },
+      order: { createdAt: 'DESC' },
     });
   }
-  async getWorkoutDetail(id: number) {
-    const w = await this.workoutRepo.findOne({ where: { id } });
-    if (!w) throw new NotFoundException("Workout not found");
-    return w;
+  // ===============================
+// WORKOUT SESSION SERVICES
+// ===============================
+async getActiveSession(user: User, workoutId: number) {
+    return this.sessionRepo.findOne({
+      where: {
+        user: { id: user.id },
+        workout: { id: workoutId },
+        completed: false,
+      },
+      relations: ['workout'],
+    });
+  }
+
+  async startSession(jwtUser: any, workoutId: number) {
+    console.log("🔥 StartSession jwtUser =", jwtUser);
+
+    // Load User entity
+    const user = await this.usersService.findByEmail(jwtUser.email);
+    if (!user) throw new NotFoundException("User not found");
+
+    // Load workout
+    const workout = await this.workoutRepo.findOne({
+      where: { id: workoutId },
+      relations: ['exercises'],
+    });
+    if (!workout) throw new NotFoundException('Workout not found');
+
+    // Kiểm tra session cũ
+    const existing = await this.sessionRepo.findOne({
+      where: {
+        user: { id: user.id },
+        workout: { id: workoutId },
+        completed: false,
+      },
+    });
+    if (existing) return existing;
+
+    // Tạo session mới
+    const session = this.sessionRepo.create({
+      user,            // <-- giờ là entity chuẩn
+      workout,
+      currentExerciseIndex: 0,
+      completed: false,
+    });
+
+    return this.sessionRepo.save(session);
+  }
+
+
+  async updateSession(user: User, sessionId: number, newIndex: number) {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId, user: { id: user.id } },
+    });
+
+    if (!session) throw new NotFoundException('Session not found');
+
+    session.currentExerciseIndex = newIndex;
+
+    return this.sessionRepo.save(session);
+  }
+
+  async completeSession(jwtUser: any, sessionId: number, dto: { seconds: number; calories: number }) {
+    const user = await this.usersService.findByEmail(jwtUser.email);
+    if (!user) throw new NotFoundException("User not found");
+
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId, user: { id: user.id } },
+      relations: ["workout"],
+    });
+
+    if (!session) throw new NotFoundException("Session not found");
+
+    // Mark completed
+    session.completed = true;
+    await this.sessionRepo.save(session);
+
+    // Calculate real duration
+    const durationMin = Math.max(1, Math.floor(dto.seconds / 60)); // minimum 1 minute
+
+    const kcal = dto.calories;
+
+    const log = this.logRepo.create({
+      user,
+      workout: session.workout,
+      durationMin,
+      kcal,
+      startedAt: new Date(Date.now() - dto.seconds * 1000), // real start time
+    });
+
+    await this.logRepo.save(log);
+
+    return { session, log };
+  }
+
+
+
+  async getSessionDetail(user: User, sessionId: number) {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId, user: { id: user.id } },
+      relations: ['workout', 'workout.exercises'],
+    });
+
+    if (!session) throw new NotFoundException('Session not found');
+
+    return session;
   }
 
 }

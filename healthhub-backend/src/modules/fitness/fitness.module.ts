@@ -5,12 +5,14 @@ import { FitnessController } from './fitness.controller';
 import { Workout } from './entities/workout.entity';
 import { WorkoutLog } from './entities/workout-log.entity';
 import { WorkoutPlan } from './entities/workout-plan.entity';
+import { WorkoutSession } from './entities/workout-session.entity';
+import { WorkoutExercise } from './entities/workout-exercise.entity';
 import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     UsersModule,
-    TypeOrmModule.forFeature([Workout, WorkoutLog, WorkoutPlan]),
+    TypeOrmModule.forFeature([Workout, WorkoutLog, WorkoutPlan, WorkoutSession, WorkoutExercise]),
   ],
   controllers: [FitnessController],
   providers: [FitnessService],

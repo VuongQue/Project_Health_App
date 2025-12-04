@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from "react-native";
+
 import {
   Play,
   Clock,
@@ -15,7 +16,6 @@ import {
   TrendingUp,
   ChevronRight,
   Dumbbell,
-  Filter,
 } from "lucide-react-native";
 
 import fitnessApi from "@/src/api/fitnessApi";
@@ -25,77 +25,55 @@ const LEVELS = ["Beginner", "Intermediate", "Advanced"];
 
 export default function FitnessScreen() {
   const router = useRouter();
+
   const [week, setWeek] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [monthly, setMonthly] = useState<any>(null);
-
   const [workouts, setWorkouts] = useState<any[]>([]);
-  const [showWorkouts, setShowWorkouts] = useState(false);
-
-  // filter state
-  const [search, setSearch] = useState("");
-  const [muscle, setMuscle] = useState("");
-  const [level, setLevel] = useState<string | undefined>();
-  const [minKcal, setMinKcal] = useState<string>("");
 
   const [loading, setLoading] = useState(true);
   const [loadingWorkouts, setLoadingWorkouts] = useState(false);
 
   useEffect(() => {
-    loadData();
+    loadDashboard();
     loadWorkouts();
-
   }, []);
 
-  const loadData = async () => {
+  // Load dashboard: week + plans + monthly
+  const loadDashboard = async () => {
     try {
       setLoading(true);
-
       const [weekRes, planRes, monthRes] = await Promise.all([
         fitnessApi.getWeekSummary(),
         fitnessApi.getPlans(),
         fitnessApi.getMonthProgress(),
       ]);
+      console.log("📌 FE WEEK =", weekRes.data);
+    console.log("📌 FE PLANS =", planRes.data);
+    console.log("📌 FE MONTH =", monthRes.data);
 
       setWeek(weekRes.data);
       setPlans(planRes.data);
       setMonthly(monthRes.data);
-    } catch (err: any) {
-      console.log("⚠️ Fitness load error:", err?.response?.data || err);
+    } catch (err) {
+      console.log("⚠️ Dashboard load error:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Load first workouts
   const loadWorkouts = async () => {
     try {
       setLoadingWorkouts(true);
-      const res = await fitnessApi.getWorkouts({
-        search: search || undefined,
-        muscleGroup: muscle || undefined,
-        level: level || undefined,
-        minKcal: minKcal ? Number(minKcal) : undefined,
-      });
+      const res = await fitnessApi.getWorkouts();
       setWorkouts(res.data);
-    } catch (err: any) {
-      console.log("⚠️ Load workouts error:", err?.response?.data || err);
+    } catch (err) {
+      console.log("⚠️ Load workouts:", err);
     } finally {
       setLoadingWorkouts(false);
     }
   };
-
-  // const onToggleWorkouts = () => {
-  //   const next = !showWorkouts;
-  //   setShowWorkouts(next);
-  //   if (next && workouts.length === 0) {
-  //     // lần đầu mở thì load
-  //     loadWorkouts();
-  //   }
-  // };
-
-  // const onApplyFilter = () => {
-  //   loadWorkouts();
-  // };
 
   if (loading || !week || !monthly) {
     return (
@@ -122,7 +100,7 @@ export default function FitnessScreen() {
           </Text>
         </View>
 
-        {/* Day completion */}
+        {/* Day circles */}
         <View style={styles.weekRow}>
           {week.days.map((day: any, i: number) => (
             <View key={i} style={styles.center}>
@@ -157,18 +135,30 @@ export default function FitnessScreen() {
           </View>
         </View>
       </View>
-      
+
+      {/* Exercises */}
       <View style={{ marginTop: 24 }}>
         <View style={styles.rowBetween}>
           <Text style={styles.sectionTitle}>Exercises</Text>
-          <TouchableOpacity onPress={() => router.push("/exercise/ExerciseList")}>
-            <Text style={[styles.accentText, { fontSize: 13 }]}>View all →</Text>
+
+          <TouchableOpacity
+            onPress={() => router.push("/exercise/ExerciseList")}
+          >
+            <Text style={[styles.accentText, { fontSize: 13 }]}>
+              View all →
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Hiển thị 3 bài đầu */}
+        {/* First 3 workouts */}
         {workouts.slice(0, 3).map((w, idx) => (
-          <View key={idx} style={styles.exerciseCard}>
+          <TouchableOpacity
+            key={idx}
+            style={styles.exerciseCard}
+            onPress={() =>
+              router.push({ pathname: "/workout/[id]", params: { id: w.id } })
+            }
+          >
             <View style={styles.rowBetween}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.exerciseTitle}>{w.title}</Text>
@@ -183,11 +173,15 @@ export default function FitnessScreen() {
               <Flame size={14} color="#f97316" />
               <Text style={styles.exerciseMeta}>{w.kcalPerMin} kcal/min</Text>
             </View>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
+
       {/* Quick Start */}
-      <TouchableOpacity style={styles.quickStart}>
+      <TouchableOpacity
+        style={styles.quickStart}
+        onPress={() => router.push("/exercise/ExerciseList")}
+      >
         <View style={styles.rowBetween}>
           <View style={styles.row}>
             <View style={styles.quickIcon}>
@@ -210,30 +204,21 @@ export default function FitnessScreen() {
           <View key={i} style={styles.workoutCard}>
             <View style={styles.rowBetween}>
               <View style={{ flex: 1 }}>
-                <View style={styles.row}>
-                  <Text style={styles.workoutName}>{plan.name}</Text>
-                  {plan.completed && (
-                    <Text style={styles.completedTag}>Completed</Text>
-                  )}
-                </View>
+                <Text style={styles.workoutName}>{plan.name}</Text>
                 <Text style={styles.workoutType}>{plan.goalType}</Text>
               </View>
 
               <TouchableOpacity
-                onPress={() => console.log("Start plan:", plan.id)}
                 style={[
                   styles.playButton,
-                  { backgroundColor: plan.completed ? "#334155" : "#2563eb" },
+                  { backgroundColor: "#2563eb" },
                 ]}
+                onPress={() => console.log("Open plan:", plan.id)}
               >
-                <Play
-                  size={16}
-                  color={plan.completed ? "#94a3b8" : "white"}
-                />
+                <Play size={16} color="white" />
               </TouchableOpacity>
             </View>
 
-            {/* Nếu sau này có duration/calories cho plan thì show ở đây */}
             <View style={styles.rowGap}>
               <View style={styles.iconText}>
                 <Clock size={14} color="#94a3b8" />
@@ -279,11 +264,6 @@ export default function FitnessScreen() {
           </View>
         ))}
       </View>
-
-      {/* ====================================================== */}
-      {/* NEW: Workout Library + Filters */}
-      {/* ====================================================== */}
-      
     </ScrollView>
   );
 }

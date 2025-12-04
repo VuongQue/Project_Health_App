@@ -98,10 +98,7 @@ export default function ExerciseListScreen() {
               key={i}
               style={styles.exerciseCard}
               onPress={() =>
-                router.push({
-                  pathname: "/exercise/[id]",
-                  params: { id: String(w.id) },
-                })
+                router.push({ pathname: "/workout/[id]", params: { id: w.id } })
               }
             >
             <View style={styles.rowBetween}>

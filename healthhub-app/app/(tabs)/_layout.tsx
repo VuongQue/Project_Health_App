@@ -30,5 +30,6 @@ const styles = StyleSheet.create({
   },
   screenWrapper: {
     flex: 1,
+    backgroundColor: "#0A0F1F", 
   },
 });

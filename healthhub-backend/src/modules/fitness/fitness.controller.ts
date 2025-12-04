@@ -1,6 +1,16 @@
-import { Controller, Get, Post, Body, UseGuards, Req, Query, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Param,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { FitnessService } from './fitness.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+
 import { CreateWorkoutDto } from './dto/create-workout.dto';
 import { CreateWorkoutLogDto } from './dto/create-workout-log.dto';
 import { CreateWorkoutPlanDto } from './dto/create-workout-plan.dto';
@@ -10,84 +20,121 @@ import { WorkoutFilterDto } from './dto/workout-filter.dto';
 export class FitnessController {
   constructor(private fitnessService: FitnessService) {}
 
-  // 1. Lấy danh sách bài tập
+  // WORKOUT LIST
   @Get('workouts')
-  getAllWorkouts(@Query() filter: WorkoutFilterDto) {
+  getAll(@Query() filter: WorkoutFilterDto) {
     return this.fitnessService.findAllWorkouts(filter);
   }
 
-  // 2. Admin thêm bài tập
+  // CREATE WORKOUT
   @Post('workouts')
   createWorkout(@Body() dto: CreateWorkoutDto) {
     return this.fitnessService.createWorkout(dto);
   }
 
-  // 3. Người dùng log workout
+  // DETAIL WORKOUT
+  @Get('workouts/:id')
+  detail(@Param('id') id: number) {
+    return this.fitnessService.getWorkoutDetail(id);
+  }
+
+  // LOG WORKOUT
   @UseGuards(JwtAuthGuard)
   @Post('logs')
-  logWorkout(@Req() req, @Body() dto: CreateWorkoutLogDto) {
+  log(@Req() req, @Body() dto: CreateWorkoutLogDto) {
     return this.fitnessService.logWorkout(req.user, dto);
   }
 
-  // 4. Lấy toàn bộ logs
+  // LIST LOGS
   @UseGuards(JwtAuthGuard)
   @Get('logs')
   getLogs(@Req() req) {
     return this.fitnessService.getLogsByUser(req.user);
   }
 
-  // 5. Tạo kế hoạch tập luyện
+  // WEEK SUMMARY
+  @UseGuards(JwtAuthGuard)
+  @Get('logs/week')
+  week(@Req() req) {
+    return this.fitnessService.getWeeklySummary(req.user);
+  }
+
+  // MONTH PROGRESS
+  @UseGuards(JwtAuthGuard)
+  @Get('progress/month')
+  month(@Req() req) {
+    return this.fitnessService.getMonthProgress(req.user);
+  }
+
+  // UI SUMMARY
+  @UseGuards(JwtAuthGuard)
+  @Get('summary')
+  summary(@Req() req) {
+    return this.fitnessService.getSummary(req.user);
+  }
+
+  // QUICK START
+  @UseGuards(JwtAuthGuard)
+  @Post('quick-start')
+  quick(@Req() req) {
+    return this.fitnessService.quickStart(req.user);
+  }
+
+  // WORKOUT PLAN
   @UseGuards(JwtAuthGuard)
   @Post('plans')
   createPlan(@Req() req, @Body() dto: CreateWorkoutPlanDto) {
     return this.fitnessService.createPlan(req.user, dto);
   }
 
-  // 6. Lấy kế hoạch
   @UseGuards(JwtAuthGuard)
   @Get('plans')
   getPlans(@Req() req) {
     return this.fitnessService.getPlansByUser(req.user);
   }
+  // ==============================
+// SESSION API
+// ==============================
 
-  // 7. Weekly summary (cũ)
+  // Lấy session hiện tại (resume workout)
   @UseGuards(JwtAuthGuard)
-  @Get("logs/week")
-  getWeeklySummary(@Req() req) {
-    return this.fitnessService.getWeeklySummary(req.user);
+  @Get('session/:workoutId')
+  getActiveSession(@Req() req, @Param('workoutId') workoutId: number) {
+    return this.fitnessService.getActiveSession(req.user, workoutId);
   }
 
-  // ⭐ NEW: Weekly detail (Mon -> Sun)
+  // Bắt đầu hoặc resume session
   @UseGuards(JwtAuthGuard)
-  @Get("logs/week-detail")
-  getWeekDetail(@Req() req) {
-    return this.fitnessService.getWeeklyDetail(req.user);
+  @Post('session/start/:workoutId')
+  startSession(@Req() req, @Param('workoutId') workoutId: number) {
+    return this.fitnessService.startSession(req.user, workoutId);
   }
 
-  // ⭐ NEW: Monthly progress
+  // Update exercise index
   @UseGuards(JwtAuthGuard)
-  @Get("progress/month")
-  getMonthProgress(@Req() req) {
-    return this.fitnessService.getMonthProgress(req.user);
+  @Post('session/update/:sessionId')
+  updateSession(
+    @Req() req,
+    @Param('sessionId') sessionId: number,
+    @Body() body: { index: number },
+  ) {
+    return this.fitnessService.updateSession(req.user, sessionId, body.index);
   }
 
-  // ⭐ NEW: Summary tổng quan UI cần
+  // Hoàn thành session
   @UseGuards(JwtAuthGuard)
-  @Get("summary")
-  getSummary(@Req() req) {
-    return this.fitnessService.getSummary(req.user);
+  @Post('session/complete/:sessionId')
+  completeSession(@Req() req, @Param('sessionId') sessionId: number, @Body() dto) {
+    return this.fitnessService.completeSession(req.user, sessionId, dto);
   }
 
-  // ⭐ NEW: Quick start workout
+
+
+  // Lấy chi tiết session (workout + exercises)
   @UseGuards(JwtAuthGuard)
-  @Post("quick-start")
-  quickStart(@Req() req) {
-    return this.fitnessService.quickStart(req.user);
+  @Get('session/detail/:sessionId')
+  getSessionDetail(@Req() req, @Param('sessionId') sessionId: number) {
+    return this.fitnessService.getSessionDetail(req.user, sessionId);
   }
-  @Get("workouts/:id")
-  getWorkoutDetail(@Param("id") id: number) {
-    return this.fitnessService.getWorkoutDetail(id);
-  }
-
 
 }
