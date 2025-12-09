@@ -12,10 +12,13 @@ import { useRouter } from "expo-router";
 
 import axiosClient from "@/src/api/axiosClient";
 import notificationApi from "@/src/api/notificationApi";
+import { profileApi } from "@/src/api/profileApi";   // ⭐ Dùng API bạn đã có
 import { IUserChallenge } from "@/src/types/challenge";
 
 export default function DashboardScreen() {
   const router = useRouter();
+
+  const [userName, setUserName] = useState("User"); // ⭐ Tên người dùng
 
   const [summary, setSummary] = useState<{
     mood: string;
@@ -32,32 +35,43 @@ export default function DashboardScreen() {
     challenges: [],
     achievements: [],
   });
+
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
+    fetchUserInfo();
     fetchDashboard();
   }, []);
 
+  // ================================
+  // ⭐ LẤY THÔNG TIN USER TỪ API /profile/me
+  // ================================
+  const fetchUserInfo = async () => {
+    try {
+      const res = await profileApi.getMe();
+      console.log("🔍 PROFILE RESPONSE:", res.data);
+      setUserName(res.data.user?.fullName || "User");
+
+    } catch (err : any) {
+      console.log("⚠️ Error loading user info:", err?.response?.data || err);
+    }
+  };
+
+  // ================================
+  // ⭐ LẤY DỮ LIỆU DASHBOARD
+  // ================================
   const fetchDashboard = async () => {
     try {
-      // ========== Notifications ==========
       const unread = await notificationApi.getUnreadCount();
       setUnreadCount(unread.data.count ?? 0);
 
-      // ========== Mood Latest ==========
       const moodRes = await axiosClient.get("/moods/latest");
       const streakRes = await axiosClient.get("/moods/streak");
+      const workoutRes = await axiosClient.get("/fitness/logs/week");
+      const challengeRes = await axiosClient.get("/challenges/me");
+      const achRes = await axiosClient.get("/achievements/me");
 
       const emoji = moodRes.data?.emoji ?? "😊";
-
-      // ========== Workouts ==========
-      const workoutRes = await axiosClient.get("/fitness/logs/week");
-
-      // ========== Challenges ==========
-      const challengeRes = await axiosClient.get("/challenges/me");
-
-      // ========== Achievements ==========
-      const achRes = await axiosClient.get("/achievements/me");
 
       setSummary({
         mood: emoji,
@@ -67,7 +81,7 @@ export default function DashboardScreen() {
         challenges: challengeRes.data ?? [],
         achievements: achRes.data ?? [],
       });
-    } catch (err: any) {
+    } catch (err : any) {
       console.log("⚠️ Dashboard error:", err?.response?.data || err);
     }
   };
@@ -78,7 +92,9 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>HealthHub</Text>
-          <Text style={styles.subtitle}>Welcome back, Alex</Text>
+
+          {/* ⭐ Đổi tên người dùng vào đây */}
+          <Text style={styles.subtitle}>Welcome back, {userName}</Text>
         </View>
 
         <TouchableOpacity
@@ -222,7 +238,7 @@ export default function DashboardScreen() {
       {/* ==== RECENT ACHIEVEMENTS ==== */}
       <Text style={styles.sectionTitle}>Recent Achievements</Text>
 
-      {summary.achievements.slice(0, 3).map((a: any, i) => (
+      {summary.achievements.slice(0, 3).map((a, i) => (
         <View key={i} style={styles.achCard}>
           <Text style={styles.achIcon}>🏆</Text>
           <View style={{ flex: 1 }}>
@@ -244,7 +260,6 @@ const styles = StyleSheet.create({
     padding: 16,
   },
 
-  /* HEADER */
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -260,7 +275,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     position: "relative",
   },
-
   badge: {
     position: "absolute",
     top: 2,
@@ -274,7 +288,6 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: "white", fontSize: 10, fontWeight: "bold" },
 
-  /* Mood card */
   moodCard: {
     backgroundColor: "#1e293b",
     borderRadius: 24,
@@ -283,29 +296,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
+
   moodRow: { flexDirection: "row", marginTop: 16 },
   moodEmoji: { fontSize: 56 },
   cardTitle: { color: "white", fontSize: 18, fontWeight: "600" },
   moodStatus: { color: "#cbd5e1", fontSize: 16, marginBottom: 10 },
-
   moodOptions: { flexDirection: "row", gap: 6 },
   moodItem: { padding: 8, borderRadius: 14 },
   moodItemActive: { backgroundColor: "#2563eb40" },
   moodItemText: { fontSize: 22, opacity: 0.7 },
 
-  /* Stats */
   sectionTitle: {
     color: "white",
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 10,
   },
+
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
     marginBottom: 24,
   },
+
   statCard: {
     width: "47%",
     backgroundColor: "#1e293b",
@@ -314,13 +328,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-  iconRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  iconRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
   iconBg: { padding: 6, borderRadius: 12 },
   statLabel: { color: "#94a3b8", fontSize: 13 },
   statValue: { color: "white", fontSize: 32, fontWeight: "700" },
   statSub: { color: "#94a3b8", fontSize: 12 },
 
-  /* Challenge */
   challengeCard: {
     borderRadius: 26,
     padding: 20,
@@ -350,7 +368,6 @@ const styles = StyleSheet.create({
   },
   progressBar: { height: 8, backgroundColor: "white", borderRadius: 4 },
 
-  /* Achievements */
   achCard: {
     flexDirection: "row",
     alignItems: "center",

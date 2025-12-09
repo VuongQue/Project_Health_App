@@ -151,4 +151,32 @@ export class ChallengeService {
       status: uc.status,
     };
   }
+
+  async getUserActiveChallenges(userId: number) {
+    const list = await this.userChallengeRepo.find({
+      where: {
+        user: { id: userId },
+        status: 'ongoing',
+      },
+      relations: ['challenge'],
+    });
+
+    return list.map((uc) => {
+      const total = uc.challenge.durationDays;
+      const completed = uc.completedDays;
+      const progress = completed / total;
+
+      return {
+        id: uc.id,
+        challengeId: uc.challenge.id,
+        name: uc.challenge.name,
+        description: uc.challenge.description,
+        durationDays: total,
+        completedDays: completed,
+        progress,
+        status: uc.status,
+      };
+    });
+  }
+
 }

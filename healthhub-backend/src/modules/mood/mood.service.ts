@@ -56,7 +56,7 @@ export class MoodService {
     };
   }
 
-  // Lấy mới nhất (bất kỳ ngày nào)
+  // Lấy mới nhất
   async getLatest(userId: string) {
     return this.moodModel
       .findOne({ userId })
@@ -64,7 +64,7 @@ export class MoodService {
       .lean();
   }
 
-  // Streak: số ngày liên tiếp có mood tính từ hôm nay lùi về
+  // Streak: số ngày liên tiếp từ hôm nay lùi về
   async getStreak(userId: string) {
     const today = this.normalizeDate(new Date());
 
@@ -81,10 +81,8 @@ export class MoodService {
 
       if (entryDate.getTime() === current.getTime()) {
         streak++;
-        // lùi về hôm trước
         current.setDate(current.getDate() - 1);
       } else if (entryDate.getTime() < current.getTime()) {
-        // Bị đứt quãng
         break;
       }
     }
@@ -92,7 +90,7 @@ export class MoodService {
     return { streak };
   }
 
-  // Weekly trend (7 ngày gần nhất)
+  // Weekly Trend (7 ngày gần nhất)
   async getWeekTrend(userId: string) {
     const today = this.normalizeDate(new Date());
     const start = this.normalizeDate(
@@ -106,46 +104,43 @@ export class MoodService {
       })
       .lean();
 
-    const map = new Map<number, number>(); // key: timestamp, value: score(-2..2)
+    const map = new Map<number, number>();
 
     for (const e of entries) {
-      const d = this.normalizeDate(new Date(e.date)).getTime();
-      map.set(d, e.mood.score);
+      const ts = this.normalizeDate(new Date(e.date)).getTime();
+      map.set(ts, e.mood.score);
     }
 
     const labels: string[] = [];
     const values: number[] = [];
-
     const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
-      const ts = d.getTime();
-      const weekday = weekdayNames[d.getDay()];
-      labels.push(weekday);
 
-      const score = map.has(ts) ? (map.get(ts) ?? 0) : 0;
-      // convert -2..+2 -> 1..5 cho UI
-      values.push(score + 3);
+      const ts = d.getTime();
+      labels.push(weekdayNames[d.getDay()]);
+
+      const score = map.has(ts) ? map.get(ts)! : 0;
+      values.push(score + 3); // convert -2..2 → 1..5
     }
 
-    return {
-      labels,
-      values,
-    };
+    return { labels, values };
   }
 
-  // Summary: average, change, bestDay
+  // Summary: average, change, bestDayScore
   async getSummary(userId: string) {
     const today = this.normalizeDate(new Date());
 
     const startCurrent = this.normalizeDate(
       new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6),
-    ); // 7 ngày hiện tại
+    );
+
     const startPrev = this.normalizeDate(
       new Date(today.getFullYear(), today.getMonth(), today.getDate() - 13),
-    ); // 7 ngày trước đó
+    );
+
     const endPrev = this.normalizeDate(
       new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7),
     );
@@ -162,7 +157,6 @@ export class MoodService {
 
     const avg = (arr: any[]) => {
       if (!arr.length) return 0;
-      // convert sang 1..5
       const sum = arr.reduce((s, e) => s + (e.mood.score + 3), 0);
       return sum / arr.length;
     };
@@ -171,7 +165,7 @@ export class MoodService {
     const prevAverage = avg(prevEntries);
     const change = +(averageMood - prevAverage).toFixed(1);
 
-    // Best day: weekday nào có avg cao nhất
+    // Best day by average score
     const weekdayNamesFull = [
       'Sunday',
       'Monday',
@@ -184,25 +178,24 @@ export class MoodService {
 
     const groupByWeekday = new Map<
       number,
-      { total: number; count: number; lastEmoji: string }
+      { total: number; count: number; lastScore: number }
     >();
 
     for (const e of allEntries) {
-      const d = new Date(e.date);
-      const weekday = d.getDay();
+      const weekday = new Date(e.date).getDay();
       const g = groupByWeekday.get(weekday) ?? {
         total: 0,
         count: 0,
-        lastEmoji: e.mood.emoji,
+        lastScore: e.mood.score,
       };
       g.total += e.mood.score + 3;
-      g.count += 1;
-      g.lastEmoji = e.mood.emoji;
+      g.count++;
+      g.lastScore = e.mood.score;
       groupByWeekday.set(weekday, g);
     }
 
     let bestDayName: string | null = null;
-    let bestDayEmoji: string | null = null;
+    let bestDayScore: number | null = null;
     let bestScore = -Infinity;
 
     for (const [weekday, stat] of groupByWeekday.entries()) {
@@ -210,7 +203,7 @@ export class MoodService {
       if (avgDay > bestScore) {
         bestScore = avgDay;
         bestDayName = weekdayNamesFull[weekday];
-        bestDayEmoji = stat.lastEmoji;
+        bestDayScore = stat.lastScore; // FE sẽ map score→icon
       }
     }
 
@@ -218,7 +211,7 @@ export class MoodService {
       averageMood: +averageMood.toFixed(1),
       change: isFinite(change) ? change : 0,
       bestDay: bestDayName,
-      bestDayEmoji,
+      bestDayScore,
     };
   }
 
@@ -232,14 +225,14 @@ export class MoodService {
     return list.map((e) => ({
       id: e._id,
       date: e.date,
-      emoji: e.mood.emoji,
       rating: e.mood.score + 3,
+      score: e.mood.score,
       note: e.note,
       tags: e.tags ?? [],
     }));
   }
 
-  // Gộp hết cho UI mobile
+  // Dashboard cho mobile
   async getDashboard(userId: string) {
     const [today, summary, streakObj, weekTrend, recent] = await Promise.all([
       this.getToday(userId),
@@ -255,7 +248,7 @@ export class MoodService {
         averageMood: summary.averageMood,
         change: summary.change,
         bestDay: summary.bestDay,
-        bestDayEmoji: summary.bestDayEmoji,
+        bestDayScore: summary.bestDayScore,
         streak: streakObj.streak,
       },
       weekTrend,

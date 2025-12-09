@@ -1,11 +1,14 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
+  Image,
 } from "react-native";
+
 import {
   Award,
   TrendingUp,
@@ -15,79 +18,82 @@ import {
   Trophy,
   Flame,
   Star,
-  LucideIcon,
+  User,
 } from "lucide-react-native";
 
-interface StatItem {
-  label: string;
-  value: string;
-  icon: LucideIcon;
-  color: string;
-}
+import { profileApi } from "@/src/api/profileApi";
+import { UserProfile, BadgeItem, ChallengeItem } from "@/src/types/profile";
 
-interface ChallengeItem {
-  name: string;
-  progress: number;
-  days: string;
-}
+export default function ProfileScreen() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
-interface BadgeItem {
-  emoji: string;
-  name: string;
-  date: string;
-}
+  const loadProfile = async () => {
+    try {
+      const res = await profileApi.getMe();
+      setProfile(res.data);
+    } catch (err) {
+      console.log("Profile load error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-const ProfileScreen: React.FC = () => {
-  const badges: BadgeItem[] = [
-    { emoji: "🏆", name: "Week Warrior", date: "Nov 7" },
-    { emoji: "⭐", name: "Mood Master", date: "Nov 4" },
-    { emoji: "💪", name: "Strength Pro", date: "Oct 28" },
-    { emoji: "🔥", name: "10-Day Streak", date: "Oct 25" },
-    { emoji: "🎯", name: "Goal Crusher", date: "Oct 20" },
-    { emoji: "❤️", name: "Heart Hero", date: "Oct 15" },
-  ];
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
-  const stats: StatItem[] = [
-    { label: "Total Workouts", value: "124", icon: TrendingUp, color: "#3b82f6" },
-    { label: "Badges Earned", value: "23", icon: Award, color: "#a855f7" },
-    { label: "Current Streak", value: "12", icon: Flame, color: "#f97316" },
-    { label: "Goals Hit", value: "18", icon: Target, color: "#22c55e" },
-  ];
+  if (loading || !profile) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
 
-  const challenges: ChallengeItem[] = [
-    { name: "30-Day Cardio", progress: 40, days: "12/30" },
-    { name: "Mindful November", progress: 75, days: "22/30" },
-    { name: "Strength Builder", progress: 60, days: "18/30" },
+  const { user, stats, badges, challenges } = profile;
+
+  const statItems = [
+    { label: "Total Workouts", value: stats.totalWorkouts, icon: TrendingUp, color: "#3b82f6" },
+    { label: "Badges Earned", value: stats.badgesEarned, icon: Award, color: "#a855f7" },
+    { label: "Current Streak", value: stats.currentStreak, icon: Flame, color: "#f97316" },
   ];
 
   return (
     <ScrollView style={styles.container}>
-      {/* Header */}
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.row}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>👤</Text>
+            {user.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <User size={40} color="white" />
+            )}
           </View>
+
           <View>
-            <Text style={styles.title}>Alex Martinez</Text>
-            <Text style={styles.subtitle}>@alexfitness</Text>
+            <Text style={styles.title}>{user.fullName}</Text>
+            <Text style={styles.subtitle}>@{user.username}</Text>
+
             <View style={styles.row}>
               <View style={styles.levelTag}>
                 <Star size={12} color="#60a5fa" />
-                <Text style={styles.levelText}>Level 8</Text>
+                <Text style={styles.levelText}>Level {user.level || 1}</Text>
               </View>
-              <Text style={styles.points}>2,840 pts</Text>
+              <Text style={styles.points}>{user.points || 0} pts</Text>
             </View>
           </View>
         </View>
+
         <TouchableOpacity style={styles.iconBtn}>
           <Settings color="#cbd5e1" size={20} />
         </TouchableOpacity>
       </View>
 
-      {/* Stats */}
+      {/* STATS */}
       <View style={styles.rowWrap}>
-        {stats.map((stat, i) => {
+        {statItems.map((stat, i: number) => {
           const Icon = stat.icon;
           return (
             <View key={i} style={styles.statBox}>
@@ -101,38 +107,45 @@ const ProfileScreen: React.FC = () => {
         })}
       </View>
 
-      {/* Challenges */}
+      {/* CHALLENGES */}
       <Text style={styles.sectionTitle}>Active Challenges</Text>
-      {challenges.map((ch, i) => (
+      {challenges?.map((ch: ChallengeItem, i: number) => (
         <View key={i} style={styles.challengeCard}>
           <View style={styles.rowBetween}>
             <Text style={styles.textWhite}>{ch.name}</Text>
-            <Text style={styles.textMuted}>{ch.days}</Text>
+            <Text style={styles.textMuted}>
+              {ch.daysCompleted}/{ch.totalDays}
+            </Text>
           </View>
+
           <View style={styles.progressBg}>
             <View style={[styles.progressFill, { width: `${ch.progress}%` }]} />
           </View>
         </View>
       ))}
 
-      {/* Badges */}
+      {/* BADGES */}
       <View style={styles.badgeHeader}>
         <Text style={styles.sectionTitle}>Badges</Text>
         <Text style={styles.linkText}>View All</Text>
       </View>
+
       <View style={styles.badgeGrid}>
-        {badges.map((b, i) => (
+        {badges?.map((b: BadgeItem, i: number) => (
           <View key={i} style={styles.badgeCard}>
-            <View style={styles.badgeIcon}>
-              <Text style={styles.badgeEmoji}>{b.emoji}</Text>
-            </View>
+            {b.iconUrl ? (
+              <Image source={{ uri: b.iconUrl }} style={styles.badgeImage} />
+            ) : (
+              <Award size={32} color="#facc15" />
+            )}
+
             <Text style={styles.badgeName}>{b.name}</Text>
             <Text style={styles.badgeDate}>{b.date}</Text>
           </View>
         ))}
       </View>
 
-      {/* Menu */}
+      {/* MENU */}
       <TouchableOpacity style={styles.menuBtn}>
         <View style={styles.row}>
           <Trophy color="#94a3b8" size={20} />
@@ -148,24 +161,24 @@ const ProfileScreen: React.FC = () => {
         </View>
         <ChevronRight color="#94a3b8" size={20} />
       </TouchableOpacity>
-
-      <TouchableOpacity style={styles.menuBtn}>
-        <View style={styles.row}>
-          <Settings color="#94a3b8" size={20} />
-          <Text style={styles.menuText}>Settings</Text>
-        </View>
-        <ChevronRight color="#94a3b8" size={20} />
-      </TouchableOpacity>
     </ScrollView>
   );
-};
+}
 
-export default ProfileScreen;
+/* ---------------------- STYLES ---------------------- */
 
 const styles = StyleSheet.create({
   container: { backgroundColor: "#0f172a", flex: 1, padding: 16 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
+
   avatar: {
     width: 72,
     height: 72,
@@ -173,10 +186,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#3b82f6",
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
   },
-  avatarText: { fontSize: 32 },
+
+  avatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 36,
+  },
+
   title: { color: "white", fontSize: 20, fontWeight: "bold" },
   subtitle: { color: "#94a3b8", fontSize: 13 },
+
   levelTag: {
     flexDirection: "row",
     alignItems: "center",
@@ -184,10 +205,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: 8,
   },
+
   levelText: { color: "#60a5fa", fontSize: 11, marginLeft: 4 },
   points: { color: "#64748b", fontSize: 11 },
+
   iconBtn: { backgroundColor: "#1e293b", padding: 8, borderRadius: 12 },
-  rowWrap: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 },
+
+  rowWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 10,
+  },
+
   statBox: {
     width: "48%",
     backgroundColor: "#1e293b",
@@ -196,10 +226,18 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
   },
+
   iconBox: { padding: 8, borderRadius: 10, marginBottom: 4 },
   statValue: { color: "white", fontSize: 20, fontWeight: "600" },
   statLabel: { color: "#94a3b8", fontSize: 12 },
-  sectionTitle: { color: "white", fontSize: 16, fontWeight: "600", marginVertical: 12 },
+
+  sectionTitle: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+    marginVertical: 12,
+  },
+
   challengeCard: {
     backgroundColor: "#1e293b",
     borderRadius: 16,
@@ -208,14 +246,43 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
   textWhite: { color: "white" },
   textMuted: { color: "#94a3b8", fontSize: 13 },
-  progressBg: { backgroundColor: "#334155", borderRadius: 4, height: 8, marginTop: 6 },
-  progressFill: { height: "100%", borderRadius: 4, backgroundColor: "#2563eb" },
-  badgeHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+
+  progressBg: {
+    backgroundColor: "#334155",
+    borderRadius: 4,
+    height: 8,
+    marginTop: 6,
+  },
+
+  progressFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: "#2563eb",
+  },
+
+  badgeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
   linkText: { color: "#3b82f6", fontSize: 13 },
-  badgeGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+
+  badgeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+
   badgeCard: {
     width: "30%",
     backgroundColor: "#1e293b",
@@ -226,18 +293,17 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 10,
   },
-  badgeIcon: {
+
+  badgeImage: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#facc15",
-    justifyContent: "center",
-    alignItems: "center",
     marginBottom: 6,
   },
-  badgeEmoji: { fontSize: 20 },
+
   badgeName: { color: "white", fontSize: 12, textAlign: "center" },
   badgeDate: { color: "#64748b", fontSize: 11 },
+
   menuBtn: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -249,5 +315,6 @@ const styles = StyleSheet.create({
     padding: 12,
     marginVertical: 4,
   },
+
   menuText: { color: "white", fontSize: 15 },
 });

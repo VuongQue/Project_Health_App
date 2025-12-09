@@ -16,6 +16,8 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
 import { FriendModule } from './modules/friend/friend.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { ProfileModule } from './modules/profile/profile.module';
+import { ElasticsearchModule } from './modules/elasticsearch/elasticsearch.module';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { ChatModule } from './modules/chat/chat.module';
     CloudinaryModule,
     FriendModule,
     ChatModule,
+    ProfileModule,
+    ElasticsearchModule,
   ],
 })
 export class AppModule {}

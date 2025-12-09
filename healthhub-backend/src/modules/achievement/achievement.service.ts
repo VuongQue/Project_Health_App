@@ -59,4 +59,21 @@ export class AchievementService {
 
     return this.userAchRepo.save(record);
   }
+
+  async getRecentAchievements(userId: number, limit = 6) {
+    return this.userAchRepo.find({
+      where: { user: { id: userId } },
+      relations: ['achievement'],
+      order: { earnedAt: 'DESC' },
+      take: limit,
+    });
+  }
+
+
+  async countUserBadges(userId: number) {
+    return this.userAchRepo.count({
+      where: { user: { id: userId } },
+    });
+  }
+
 }

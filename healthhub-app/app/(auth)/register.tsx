@@ -10,6 +10,7 @@ import { User, Mail, Lock, CheckSquare, Square } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 
+import authApi from "@/src/api/authApi";
 import { PrimaryButton } from "@/components/auth/PrimaryButton";
 import { TextInputField } from "@/components/auth/TextInputField";
 import { SocialButton } from "@/components/auth/SocialButton";
@@ -23,7 +24,7 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!fullName || !email || !password || !confirmPassword) {
       alert("Please fill all fields");
       return;
@@ -37,7 +38,23 @@ export default function RegisterScreen() {
       return;
     }
 
-    router.replace("/(tabs)");
+    try {
+      const res = await authApi.register({
+        fullName,
+        email,
+        password,
+      });
+
+      alert("OTP sent to your email!");
+
+      // Điều hướng sang màn hình nhập OTP
+      router.push({
+        pathname: "/(auth)/otpScreen" as any,
+        params: { email },
+      });
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Register failed");
+    }
   };
 
   return (

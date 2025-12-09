@@ -13,13 +13,26 @@ export default {
   // =====================
   // WORKOUT CRUD
   // =====================
-  getWorkouts: (params?: {
+    getWorkouts: (_params?: {
     search?: string;
     muscleGroup?: string;
     level?: string;
     minKcal?: number;
-    maxKcal?: number;
-  }) => axiosClient.get("/fitness/workouts", { params }),
+  }) => {
+    const params: any = {};
+
+    if (_params?.search) params.search = _params.search;
+    if (_params?.muscleGroup) params.muscleGroup = _params.muscleGroup;
+    if (_params?.level) params.level = _params.level;
+    if (_params?.minKcal != null) params.minKcal = _params.minKcal;
+
+    console.log("📤 FINAL SENT PARAMS =", params);
+
+    return axiosClient.get("/fitness/workouts", { params });
+  },
+
+
+
 
   getWorkoutById: (id: number | string) =>
     axiosClient.get(`/fitness/workouts/${id}`),

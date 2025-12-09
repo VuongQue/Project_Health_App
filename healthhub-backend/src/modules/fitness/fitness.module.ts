@@ -8,13 +8,16 @@ import { WorkoutPlan } from './entities/workout-plan.entity';
 import { WorkoutSession } from './entities/workout-session.entity';
 import { WorkoutExercise } from './entities/workout-exercise.entity';
 import { UsersModule } from '../users/users.module';
+import { ElasticsearchModule } from '../elasticsearch/elasticsearch.module';
 
 @Module({
   imports: [
     UsersModule,
+    ElasticsearchModule,
     TypeOrmModule.forFeature([Workout, WorkoutLog, WorkoutPlan, WorkoutSession, WorkoutExercise]),
   ],
   controllers: [FitnessController],
   providers: [FitnessService],
+  exports: [FitnessService], 
 })
 export class FitnessModule {} 

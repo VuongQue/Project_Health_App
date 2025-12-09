@@ -1,7 +1,23 @@
+import { IsOptional, IsString, IsNumberString } from "class-validator";
+
 export class WorkoutFilterDto {
-  search?: string;       // tìm theo title
-  muscleGroup?: string;  // Chest, Legs, Back...
-  level?: string;        // Beginner / Intermediate / Advanced
-  minKcal?: number;      // kcalPerMin >= minKcal
-  maxKcal?: number;      // kcalPerMin <= maxKcal
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  muscleGroup?: string;
+
+  @IsOptional()
+  @IsString()
+  level?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  minKcal?: number;
+
+  @IsOptional()
+  @IsNumberString()
+  maxKcal?: number;
 }

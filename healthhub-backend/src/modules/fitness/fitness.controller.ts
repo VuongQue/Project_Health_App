@@ -137,4 +137,10 @@ export class FitnessController {
     return this.fitnessService.getSessionDetail(req.user, sessionId);
   }
 
+  @Get('admin/reindex')
+  reindex() {
+    return this.fitnessService.reindexAllWorkouts();
+  }
+
+
 }

@@ -16,6 +16,6 @@ import { NotificationModule } from '../notification/notification.module';
   ],
   controllers: [AchievementController],
   providers: [AchievementService, AchievementListener],
-  exports: [AchievementListener],
+  exports: [AchievementListener, AchievementService],
 })
 export class AchievementModule {}

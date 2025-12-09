@@ -1,45 +1,90 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { Flame, Dumbbell, Filter } from "lucide-react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
+import { Flame, Dumbbell, ArrowLeft } from "lucide-react-native";
 import fitnessApi from "@/src/api/fitnessApi";
 import { Workout } from "@/src/types/workout";
-import { ArrowLeft } from "lucide-react-native";
 import { useRouter } from "expo-router";
-
 
 const LEVELS = ["Beginner", "Intermediate", "Advanced"];
 
 export default function ExerciseListScreen() {
-    const router = useRouter();
+  const router = useRouter();
+
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filters
   const [search, setSearch] = useState("");
   const [muscle, setMuscle] = useState("");
   const [level, setLevel] = useState("");
   const [minKcal, setMinKcal] = useState("");
 
+  // Debounce timer
+  const debounceRef = useRef<any>(null);
+
+  // Load API
   const load = async () => {
     setLoading(true);
-    const res = await fitnessApi.getWorkouts({
+
+    const filters: any = {
       search: search || undefined,
       muscleGroup: muscle || undefined,
       level: level || undefined,
       minKcal: minKcal ? Number(minKcal) : undefined,
-    });
-    setWorkouts(res.data);
+    };
+
+    console.log("📤 FE SENDING FILTERS =", filters);
+
+    try {
+      const res = await fitnessApi.getWorkouts(filters);
+      setWorkouts(res.data);
+    } catch (err) {
+      console.log("⚠️ Load workouts error:", err);
+    }
+
     setLoading(false);
   };
 
+  // Debounce search/filter changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      load();
+    }, 350);
+
+    return () => clearTimeout(debounceRef.current);
+  }, [search, muscle, level, minKcal]);
+
+  // Initial load (no filter)
   useEffect(() => {
     load();
   }, []);
 
+  const resetFilters = () => {
+    setSearch("");
+    setMuscle("");
+    setLevel("");
+    setMinKcal("");
+
+    // Gọi lại load() sau khi reset
+    setTimeout(() => load(), 200);
+  };
+
   return (
     <ScrollView style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <ArrowLeft size={22} color="white" />
-        </TouchableOpacity>
+      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <ArrowLeft size={22} color="white" />
+      </TouchableOpacity>
+
       <Text style={styles.title}>All Exercises</Text>
 
       {/* Filters */}
@@ -60,6 +105,7 @@ export default function ExerciseListScreen() {
           onChangeText={setMuscle}
         />
 
+        {/* Level Chips */}
         <View style={[styles.row, { flexWrap: "wrap", marginBottom: 12 }]}>
           {LEVELS.map((lv) => {
             const active = level === lv;
@@ -69,7 +115,9 @@ export default function ExerciseListScreen() {
                 onPress={() => setLevel(active ? "" : lv)}
                 style={[styles.levelChip, active && styles.levelChipActive]}
               >
-                <Text style={{ color: active ? "white" : "#cbd5f5" }}>{lv}</Text>
+                <Text style={{ color: active ? "white" : "#cbd5f5" }}>
+                  {lv}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -84,8 +132,9 @@ export default function ExerciseListScreen() {
           keyboardType="numeric"
         />
 
-        <TouchableOpacity style={styles.filterBtn} onPress={load}>
-          <Text style={styles.filterText}>Apply Filters</Text>
+        {/* Reset */}
+        <TouchableOpacity style={styles.resetBtn} onPress={resetFilters}>
+          <Text style={styles.resetText}>Reset Filters</Text>
         </TouchableOpacity>
       </View>
 
@@ -93,14 +142,17 @@ export default function ExerciseListScreen() {
       {loading ? (
         <ActivityIndicator color="#3b82f6" />
       ) : (
-        workouts.map((w, i) => (
+        workouts.map((w) => (
           <TouchableOpacity
-              key={i}
-              style={styles.exerciseCard}
-              onPress={() =>
-                router.push({ pathname: "/workout/[id]", params: { id: w.id } })
-              }
-            >
+            key={w.id}
+            style={styles.exerciseCard}
+            onPress={() =>
+              router.push({
+                pathname: "/workout/[id]",
+                params: { id: w.id },
+              })
+            }
+          >
             <View style={styles.rowBetween}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.exerciseTitle}>{w.title}</Text>
@@ -147,7 +199,11 @@ const styles = StyleSheet.create({
   },
 
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
 
   // Chips
   levelChip: {
@@ -161,13 +217,14 @@ const styles = StyleSheet.create({
   },
   levelChipActive: { backgroundColor: "#2563eb" },
 
-  filterBtn: {
-    backgroundColor: "#2563eb",
+  resetBtn: {
+    backgroundColor: "#475569",
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: "center",
+    marginTop: 4,
   },
-  filterText: { color: "white", fontWeight: "600" },
+  resetText: { color: "white", fontWeight: "600" },
 
   exerciseCard: {
     backgroundColor: "#1e293b",
@@ -179,16 +236,9 @@ const styles = StyleSheet.create({
   },
   exerciseTitle: { color: "white", fontSize: 16, fontWeight: "600" },
   exerciseMeta: { color: "#94a3b8", fontSize: 12 },
-    headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-    },
 
-    backBtn: {
+  backBtn: {
     padding: 6,
     borderRadius: 8,
-    },
-
+  },
 });

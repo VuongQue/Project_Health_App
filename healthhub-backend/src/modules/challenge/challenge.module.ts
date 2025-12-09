@@ -17,5 +17,6 @@ import { NotificationModule } from '../notification/notification.module';
   ],
   controllers: [ChallengeController],
   providers: [ChallengeService],
+  exports: [ChallengeService],
 })
 export class ChallengeModule {}

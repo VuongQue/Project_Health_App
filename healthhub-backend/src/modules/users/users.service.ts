@@ -10,6 +10,10 @@ export class UsersService {
     private usersRepo: Repository<User>,
   ) {}
 
+  async save(user: User) {
+    return this.usersRepo.save(user);
+  }
+
   findByEmail(email: string) {
     return this.usersRepo.findOne({ where: { email } });
   }
@@ -74,7 +78,27 @@ export class UsersService {
     return users;
   }
 
+  async getProfile(userId: number) {
+    return this.usersRepo.findOne({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        username: true,
+        avatarUrl: true,
+        dailyGoal: true,
+        level: true,
+        points: true,
+        email: true,
+        createdAt: true,
+      },
+    });
+  }
 
-    
+  async updateProfile(userId: number, dto: any) {
+    await this.usersRepo.update(userId, dto);
+    return this.getProfile(userId);
+  }
+
 
 }

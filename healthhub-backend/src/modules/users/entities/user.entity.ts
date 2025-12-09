@@ -20,7 +20,18 @@ export class User {
   email: string;
 
   @Column({ nullable: true })
-  password: string; // nullable nếu login bằng Google
+  password: string;
+
+  @Column({ default: false })
+  isVerified: boolean;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  otpCode: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  otpExpiresAt: Date | null;
+
+
 
   @Column({ type: 'enum', enum: AuthProvider, default: AuthProvider.LOCAL })
   provider: AuthProvider;
@@ -31,12 +42,14 @@ export class User {
   @Column({ nullable: true })
   avatarUrl: string;
 
+  @Column({ nullable: true })
+  dailyGoal: string;
+
   @Column({ default: 1 })
   level: number;
 
   @Column({ default: 0 })
   points: number;
-
 
   @CreateDateColumn()
   createdAt: Date;
