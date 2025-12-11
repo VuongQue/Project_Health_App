@@ -10,19 +10,20 @@ export class MoodService {
     @InjectModel(MoodEntry.name) private moodModel: Model<MoodEntry>,
   ) {}
 
+  // Chuẩn hoá date về 00:00:00 để so sánh theo ngày
   private normalizeDate(d: Date) {
     const date = new Date(d);
     date.setHours(0, 0, 0, 0);
     return date;
   }
 
-  // Tạo / cập nhật mood cho 1 ngày
+  // Tạo / cập nhật mood cho 1 ngày — LƯU THẲNG 1..5
   async create(userId: string, dto: CreateMoodDto) {
     const date = this.normalizeDate(dto.date ? new Date(dto.date) : new Date());
 
     const existing = await this.moodModel.findOne({ userId, date });
     if (existing) {
-      existing.mood = dto.mood;
+      existing.mood = dto.mood; // dto.mood.score đã là 1..5
       existing.note = dto.note;
       existing.tags = dto.tags;
       await existing.save();
@@ -32,7 +33,7 @@ export class MoodService {
     const mood = new this.moodModel({
       userId,
       date,
-      mood: dto.mood,
+      mood: dto.mood, // score = 1..5
       note: dto.note,
       tags: dto.tags,
     });
@@ -40,7 +41,7 @@ export class MoodService {
     return mood.save();
   }
 
-  // Hôm nay
+  // Hôm nay — trả đúng 1..5
   async getToday(userId: string) {
     const today = this.normalizeDate(new Date());
     const entry = await this.moodModel
@@ -51,12 +52,12 @@ export class MoodService {
     return {
       hasEntry: !!entry,
       date: today,
-      mood: entry?.mood ?? null,
+      mood: entry?.mood ?? null, // score = 1..5
       note: entry?.note ?? null,
     };
   }
 
-  // Lấy mới nhất
+  // Lấy entry gần nhất
   async getLatest(userId: string) {
     return this.moodModel
       .findOne({ userId })
@@ -64,7 +65,7 @@ export class MoodService {
       .lean();
   }
 
-  // Streak: số ngày liên tiếp từ hôm nay lùi về
+  // Streak: số ngày liên tiếp từ hôm nay trở về trước
   async getStreak(userId: string) {
     const today = this.normalizeDate(new Date());
 
@@ -90,46 +91,52 @@ export class MoodService {
     return { streak };
   }
 
-  // Weekly Trend (7 ngày gần nhất)
+  // Weekly Trend — TRẢ VỀ score 1..5 cho FE
   async getWeekTrend(userId: string) {
     const today = this.normalizeDate(new Date());
-    const start = this.normalizeDate(
-      new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6),
+
+    // Lấy ngày thứ 2 của tuần hiện tại
+    const day = today.getDay(); // 0=Sun, 1=Mon,...
+    const monday = this.normalizeDate(
+      new Date(today.getFullYear(), today.getMonth(), today.getDate() - (day === 0 ? 6 : day - 1))
     );
 
-    const entries = await this.moodModel
-      .find({
-        userId,
-        date: { $gte: start, $lte: today },
-      })
-      .lean();
+    // Chủ nhật
+    const sunday = this.normalizeDate(
+      new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
+    );
 
+    // Lấy mọi entry trong khoảng Mon → Sun
+    const entries = await this.moodModel.find({
+      userId,
+      date: { $gte: monday, $lte: sunday },
+    }).lean();
+
+    // map: timestamp → score (1..5)
     const map = new Map<number, number>();
-
     for (const e of entries) {
       const ts = this.normalizeDate(new Date(e.date)).getTime();
       map.set(ts, e.mood.score);
     }
 
-    const labels: string[] = [];
+    const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const values: number[] = [];
-    const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     for (let i = 0; i < 7; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
 
       const ts = d.getTime();
-      labels.push(weekdayNames[d.getDay()]);
+      const score = map.get(ts) ?? 3; // default neutral = 3
 
-      const score = map.has(ts) ? map.get(ts)! : 0;
-      values.push(score + 3); // convert -2..2 → 1..5
+      values.push(score);
     }
 
     return { labels, values };
   }
 
-  // Summary: average, change, bestDayScore
+
+  // Summary: average, change, bestDayScore (1..5)
   async getSummary(userId: string) {
     const today = this.normalizeDate(new Date());
 
@@ -155,17 +162,18 @@ export class MoodService {
       this.moodModel.find({ userId }).lean(),
     ]);
 
-    const avg = (arr: any[]) => {
-      if (!arr.length) return 0;
-      const sum = arr.reduce((s, e) => s + (e.mood.score + 3), 0);
+    // average score = 1..5
+    const avgRaw = (arr: any[]) => {
+      if (!arr.length) return 3;
+      const sum = arr.reduce((s, e) => s + e.mood.score, 0);
       return sum / arr.length;
     };
 
-    const averageMood = avg(currentEntries);
-    const prevAverage = avg(prevEntries);
-    const change = +(averageMood - prevAverage).toFixed(1);
+    const averageMood = avgRaw(currentEntries);
+    const prevAverageMood = avgRaw(prevEntries);
+    const change = +(averageMood - prevAverageMood).toFixed(1);
 
-    // Best day by average score
+    // Best Day (theo trung bình score 1..5)
     const weekdayNamesFull = [
       'Sunday',
       'Monday',
@@ -176,21 +184,13 @@ export class MoodService {
       'Saturday',
     ];
 
-    const groupByWeekday = new Map<
-      number,
-      { total: number; count: number; lastScore: number }
-    >();
+    const groupByWeekday = new Map<number, { total: number; count: number }>();
 
     for (const e of allEntries) {
       const weekday = new Date(e.date).getDay();
-      const g = groupByWeekday.get(weekday) ?? {
-        total: 0,
-        count: 0,
-        lastScore: e.mood.score,
-      };
-      g.total += e.mood.score + 3;
+      const g = groupByWeekday.get(weekday) ?? { total: 0, count: 0 };
+      g.total += e.mood.score; // score 1..5
       g.count++;
-      g.lastScore = e.mood.score;
       groupByWeekday.set(weekday, g);
     }
 
@@ -203,7 +203,7 @@ export class MoodService {
       if (avgDay > bestScore) {
         bestScore = avgDay;
         bestDayName = weekdayNamesFull[weekday];
-        bestDayScore = stat.lastScore; // FE sẽ map score→icon
+        bestDayScore = +avgDay.toFixed(1);
       }
     }
 
@@ -211,10 +211,11 @@ export class MoodService {
       averageMood: +averageMood.toFixed(1),
       change: isFinite(change) ? change : 0,
       bestDay: bestDayName,
-      bestDayScore,
+      bestDayScore, // 1..5
     };
   }
 
+  // Lịch sử gần đây — rating = 1..5
   async getRecent(userId: string, limit = 10) {
     const list = await this.moodModel
       .find({ userId })
@@ -225,14 +226,14 @@ export class MoodService {
     return list.map((e) => ({
       id: e._id,
       date: e.date,
-      rating: e.mood.score + 3,
-      score: e.mood.score,
+      rating: e.mood.score, // 1..5
+      score: e.mood.score,  // 1..5
       note: e.note,
       tags: e.tags ?? [],
     }));
   }
 
-  // Dashboard cho mobile
+  // Dashboard tổng hợp
   async getDashboard(userId: string) {
     const [today, summary, streakObj, weekTrend, recent] = await Promise.all([
       this.getToday(userId),

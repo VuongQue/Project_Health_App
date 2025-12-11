@@ -11,34 +11,22 @@ import {
 } from "react-native";
 import { Calendar, TrendingUp } from "lucide-react-native";
 import { LineChart } from "react-native-chart-kit";
-
 import moodApi from "@/src/api/moodApi";
 
 export default function MoodTrackerScreen() {
-  const [selectedValue, setSelectedValue] = useState<number>(4);
+  const [selectedValue, setSelectedValue] = useState<number>(3); // 1–5
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [weekData, setWeekData] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
-  const [weekLabels, setWeekLabels] = useState<string[]>([
-    "Mon",
-    "Tue",
-    "Wed",
-    "Thu",
-    "Fri",
-    "Sat",
-    "Sun",
-  ]);
+  const [weekData, setWeekData] = useState<number[]>([]);
+  const [weekLabels, setWeekLabels] = useState<string[]>([]);
 
   const [averageMood, setAverageMood] = useState<number | null>(null);
   const [change, setChange] = useState<number | null>(null);
   const [bestDay, setBestDay] = useState<string | null>(null);
-  const [bestDayEmoji, setBestDayEmoji] = useState<string | null>(null);
+  const [bestDayScore, setBestDayScore] = useState<number | null>(null);
   const [streak, setStreak] = useState<number | null>(null);
   const [todayDateText, setTodayDateText] = useState<string>("Today");
-
-  // TODO: Thay bằng token thật từ auth
-  const token = "<JWT_TOKEN>";
 
   const moods = [
     { emoji: "😔", label: "Sad", value: 1, color: "#64748b" },
@@ -48,38 +36,6 @@ export default function MoodTrackerScreen() {
     { emoji: "😄", label: "Great", value: 5, color: "#22c55e" },
   ];
 
-  const selectedMood = useMemo(
-    () => moods.find((m) => m.value === selectedValue) ?? moods[3],
-    [selectedValue]
-  );
-
-  const insights = useMemo(
-    () => [
-      {
-        label: "Average Mood",
-        value:
-          averageMood != null ? `${averageMood.toFixed(1)}/5` : "--",
-        change:
-          change != null && !Number.isNaN(change)
-            ? (change > 0 ? "+" : "") + change.toFixed(1)
-            : undefined,
-        positive: change != null ? change >= 0 : true,
-      },
-      {
-        label: "Best Day",
-        value: bestDay ?? "--",
-        emoji: bestDayEmoji ?? undefined,
-      },
-      {
-        label: "Streak",
-        value: streak != null ? `${streak} days` : "--",
-        emoji: "🔥",
-      },
-    ],
-    [averageMood, change, bestDay, bestDayEmoji, streak]
-  );
-
-  // Load Dashboard 1 lần duy nhất
   useEffect(() => {
     loadDashboard();
   }, []);
@@ -88,41 +44,38 @@ export default function MoodTrackerScreen() {
     try {
       setLoading(true);
 
-      const res = await moodApi.getDashboard(); // axios response
-      const data = res.data; // ⭐ lấy data thật
+      const res = await moodApi.getDashboard();
+      const data = res.data;
 
-      // Now safe:
-      setSelectedValue(data.today?.mood ? data.today.mood.score + 3 : 4);
+      console.log("🔎 RAW DATA FE:", JSON.stringify(data, null, 2));
+
+      const todayScore = data.today?.mood?.score ?? 3;
+      setSelectedValue(todayScore);
 
       if (data.today?.date) {
         const d = new Date(data.today.date);
-        const text = d.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        });
-        setTodayDateText(text);
+        setTodayDateText(
+          d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+        );
       }
 
-      const ins = data.insights ?? {};
-      setAverageMood(ins.averageMood ?? null);
-      setChange(ins.change ?? null);
-      setBestDay(ins.bestDay ?? null);
-      setBestDayEmoji(ins.bestDayEmoji ?? null);
-      setStreak(ins.streak ?? null);
+      setAverageMood(data.insights?.averageMood ?? null);
+      setChange(data.insights?.change ?? null);
+      setBestDay(data.insights?.bestDay ?? null);
+      setBestDayScore(data.insights?.bestDayScore ?? null);
+      setStreak(data.insights?.streak ?? null);
 
       if (data.weekTrend) {
-        setWeekLabels(data.weekTrend.labels ?? weekLabels);
-        setWeekData(data.weekTrend.values ?? weekData);
+        setWeekLabels(data.weekTrend.labels ?? []);
+        setWeekData(data.weekTrend.values ?? []);
       }
-
     } catch (err) {
       console.error(err);
-      Alert.alert("Error", "Failed to load mood data");
+      Alert.alert("Error", "Failed to load mood dashboard");
     } finally {
       setLoading(false);
     }
   };
-
 
   const handleSaveMood = async () => {
     try {
@@ -135,33 +88,57 @@ export default function MoodTrackerScreen() {
         mood: {
           emoji: mood.emoji,
           color: mood.color,
-          score: mood.value - 3, // convert 1..5 → -2..2
+          score: selectedValue, // score 1..5
         },
       };
 
       await moodApi.saveMood(payload);
-
       await loadDashboard();
+
       Alert.alert("Success", "Mood saved!");
     } catch (err) {
       console.error(err);
-      Alert.alert("Error", "Cannot save mood");
+      Alert.alert("Error", "Failed to save mood");
     } finally {
       setSaving(false);
     }
   };
+
+  const insights = useMemo(
+    () => [
+      {
+        label: "Average Mood",
+        value: averageMood != null ? `${averageMood.toFixed(1)}/5` : "--",
+        change:
+          change != null ? `${change > 0 ? "+" : ""}${change.toFixed(1)}` : "",
+        positive: change != null ? change >= 0 : true,
+      },
+      {
+        label: "Best Day",
+        value: bestDay ?? "--",
+        emoji: bestDayScore ? moods[bestDayScore - 1]?.emoji : "",
+      },
+      {
+        label: "Streak",
+        value: streak != null ? `${streak} days` : "--",
+        emoji: "🔥",
+      },
+    ],
+    [averageMood, change, bestDay, bestDayScore, streak]
+  );
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Mood Tracker</Text>
       <Text style={styles.subtitle}>How are you feeling today?</Text>
 
-      {/* Mood Card */}
+      {/* Today’s Mood */}
       <View style={styles.card}>
         <View style={styles.rowBetween}>
           <Text style={styles.sectionTitle}>Today's Mood</Text>
+
           <View style={styles.rowGap}>
-            <Calendar color="#94a3b8" size={16} />
+            <Calendar size={16} color="#94a3b8" />
             <Text style={styles.textMuted}>{todayDateText}</Text>
           </View>
         </View>
@@ -185,7 +162,7 @@ export default function MoodTrackerScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+          style={[styles.saveBtn, saving && { opacity: 0.7 }]}
           disabled={saving}
           onPress={handleSaveMood}
         >
@@ -202,11 +179,13 @@ export default function MoodTrackerScreen() {
         {insights.map((ins, i) => (
           <View key={i} style={styles.insightBox}>
             <Text style={styles.textSmall}>{ins.label}</Text>
+
             <View style={styles.rowGap}>
               <Text style={styles.textWhite}>{ins.value}</Text>
               {ins.emoji && <Text>{ins.emoji}</Text>}
             </View>
-            {ins.change && (
+
+            {!!ins.change && (
               <Text
                 style={[
                   styles.textSmall,
@@ -223,22 +202,37 @@ export default function MoodTrackerScreen() {
       {/* Weekly Trend */}
       <View style={styles.card}>
         <View style={styles.rowGap}>
-          <TrendingUp color="#2563eb" size={18} />
+          <TrendingUp size={18} color="#2563eb" />
           <Text style={styles.sectionTitle}>Weekly Trend</Text>
         </View>
 
         {loading ? (
-          <View style={{ paddingVertical: 24 }}>
+          <View style={{ padding: 24 }}>
             <ActivityIndicator color="#2563eb" />
           </View>
         ) : (
           <LineChart
             data={{
               labels: weekLabels,
-              datasets: [{ data: weekData }],
+              datasets: [
+                {
+                  data: weekData,
+                  color: () => "#2563eb",
+                  strokeWidth: 3,
+                },
+                {
+                  // invisible dataset forcing Y scale 1 → 5
+                  data: [1, 5],
+                  withDots: false,
+                  color: () => "rgba(0,0,0,0)",
+                  strokeWidth: 0,
+                },
+              ],
             }}
             width={Dimensions.get("window").width - 48}
             height={220}
+            segments={4}
+            yAxisInterval={1}
             chartConfig={{
               backgroundGradientFrom: "#1e293b",
               backgroundGradientTo: "#1e293b",
@@ -250,9 +244,18 @@ export default function MoodTrackerScreen() {
                 strokeWidth: "2",
                 stroke: "#2563eb",
               },
+              propsForBackgroundLines: {
+                strokeDasharray: "",
+                stroke: "#334155",
+              },
             }}
             bezier
-            style={{ marginVertical: 12, borderRadius: 16 }}
+            withInnerLines
+            withOuterLines={false}
+            style={{
+              marginVertical: 12,
+              borderRadius: 16,
+            }}
           />
         )}
       </View>
@@ -260,10 +263,15 @@ export default function MoodTrackerScreen() {
   );
 }
 
+/* ----------------------------------------------------------
+    STYLES
+----------------------------------------------------------- */
 const styles = StyleSheet.create({
   container: { backgroundColor: "#0f172a", flex: 1, padding: 16 },
+
   title: { color: "white", fontSize: 24, fontWeight: "bold" },
   subtitle: { color: "#94a3b8", fontSize: 13, marginBottom: 16 },
+
   card: {
     backgroundColor: "#1e293b",
     borderRadius: 24,
@@ -272,38 +280,49 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
     marginBottom: 16,
   },
+
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
   },
+
   rowGap: { flexDirection: "row", alignItems: "center", gap: 6 },
+
   textMuted: { color: "#94a3b8", fontSize: 12 },
+
   sectionTitle: { color: "white", fontSize: 16, fontWeight: "600" },
+
   moodButton: {
     flex: 1,
     alignItems: "center",
     padding: 8,
     borderRadius: 16,
   },
+
   moodActive: { backgroundColor: "rgba(37,99,235,0.3)" },
   moodInactive: { backgroundColor: "rgba(51,65,85,0.6)" },
+
   moodEmoji: { fontSize: 28 },
   moodLabel: { color: "#cbd5e1", fontSize: 12, marginTop: 4 },
+
   saveBtn: {
     backgroundColor: "#2563eb",
     paddingVertical: 10,
     borderRadius: 12,
     marginTop: 16,
   },
+
   saveBtnText: { textAlign: "center", color: "white", fontWeight: "600" },
+
   rowWrap: {
     flexDirection: "row",
     justifyContent: "space-between",
     flexWrap: "wrap",
     marginBottom: 16,
   },
+
   insightBox: {
     width: "31%",
     backgroundColor: "#1e293b",
@@ -312,6 +331,7 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
     padding: 10,
   },
+
   textSmall: { color: "#94a3b8", fontSize: 12 },
   textWhite: { color: "white", fontWeight: "500" },
 });

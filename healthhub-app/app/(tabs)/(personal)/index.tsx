@@ -12,13 +12,13 @@ import { useRouter } from "expo-router";
 
 import axiosClient from "@/src/api/axiosClient";
 import notificationApi from "@/src/api/notificationApi";
-import { profileApi } from "@/src/api/profileApi";   // ⭐ Dùng API bạn đã có
+import { profileApi } from "@/src/api/profileApi";
 import { IUserChallenge } from "@/src/types/challenge";
 
 export default function DashboardScreen() {
   const router = useRouter();
 
-  const [userName, setUserName] = useState("User"); // ⭐ Tên người dùng
+  const [userName, setUserName] = useState("User");
 
   const [summary, setSummary] = useState<{
     mood: string;
@@ -38,22 +38,27 @@ export default function DashboardScreen() {
 
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const MOOD_EMOJIS = ["😔", "😐", "🙂", "😊", "😄"];
+
+  const normalizeMoodScore = (raw: number | undefined | null) => {
+    if (!raw) return 3;
+    return Math.min(5, Math.max(1, raw));
+  };
+
   useEffect(() => {
     fetchUserInfo();
     fetchDashboard();
   }, []);
 
   // ================================
-  // ⭐ LẤY THÔNG TIN USER TỪ API /profile/me
+  // ⭐ LẤY THÔNG TIN USER
   // ================================
   const fetchUserInfo = async () => {
     try {
       const res = await profileApi.getMe();
-      console.log("🔍 PROFILE RESPONSE:", res.data);
       setUserName(res.data.user?.fullName || "User");
-
-    } catch (err : any) {
-      console.log("⚠️ Error loading user info:", err?.response?.data || err);
+    } catch (err: any) {
+      console.log("⚠️ Error loading user info:", err?.response?.data ?? err);
     }
   };
 
@@ -65,24 +70,28 @@ export default function DashboardScreen() {
       const unread = await notificationApi.getUnreadCount();
       setUnreadCount(unread.data.count ?? 0);
 
-      const moodRes = await axiosClient.get("/moods/latest");
-      const streakRes = await axiosClient.get("/moods/streak");
+      // ⭐ Dùng API mới
+      const moodDash = await axiosClient.get("/moods/dashboard");
+
+      const todayScore = normalizeMoodScore(moodDash.data?.today?.mood?.score);
+      const todayEmoji = MOOD_EMOJIS[todayScore - 1];
+
+      const streak = moodDash.data?.insights?.streak ?? 0;
+
       const workoutRes = await axiosClient.get("/fitness/logs/week");
       const challengeRes = await axiosClient.get("/challenges/me");
       const achRes = await axiosClient.get("/achievements/me");
 
-      const emoji = moodRes.data?.emoji ?? "😊";
-
       setSummary({
-        mood: emoji,
-        streak: streakRes.data?.streak ?? 0,
+        mood: todayEmoji,
+        streak,
         workoutsCompleted: workoutRes.data?.completed ?? 0,
         workoutsTarget: workoutRes.data?.target ?? 12,
         challenges: challengeRes.data ?? [],
         achievements: achRes.data ?? [],
       });
-    } catch (err : any) {
-      console.log("⚠️ Dashboard error:", err?.response?.data || err);
+    } catch (err: any) {
+      console.log("⚠️ Dashboard error:", err?.response?.data ?? err);
     }
   };
 
@@ -92,8 +101,6 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>HealthHub</Text>
-
-          {/* ⭐ Đổi tên người dùng vào đây */}
           <Text style={styles.subtitle}>Welcome back, {userName}</Text>
         </View>
 
@@ -151,7 +158,6 @@ export default function DashboardScreen() {
             </View>
             <Text style={styles.statLabel}>Streak</Text>
           </View>
-
           <Text style={styles.statValue}>{summary.streak}</Text>
           <Text style={styles.statSub}>days</Text>
         </View>
@@ -164,7 +170,6 @@ export default function DashboardScreen() {
             </View>
             <Text style={styles.statLabel}>Workouts</Text>
           </View>
-
           <Text style={styles.statValue}>
             {summary.workoutsCompleted}/{summary.workoutsTarget}
           </Text>
@@ -179,7 +184,6 @@ export default function DashboardScreen() {
             </View>
             <Text style={styles.statLabel}>Achievements</Text>
           </View>
-
           <Text style={styles.statValue}>{summary.achievements.length}</Text>
           <Text style={styles.statSub}>earned</Text>
         </View>
@@ -192,7 +196,6 @@ export default function DashboardScreen() {
             </View>
             <Text style={styles.statLabel}>Challenges</Text>
           </View>
-
           <Text style={styles.statValue}>{summary.challenges.length}</Text>
           <Text style={styles.statSub}>ongoing</Text>
         </View>
@@ -328,13 +331,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
+
   iconRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     marginBottom: 12,
   },
+
   iconBg: { padding: 6, borderRadius: 12 },
+
   statLabel: { color: "#94a3b8", fontSize: 13 },
   statValue: { color: "white", fontSize: 32, fontWeight: "700" },
   statSub: { color: "#94a3b8", fontSize: 12 },
@@ -344,11 +350,13 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 24,
   },
+
   challengeHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 14,
   },
+
   challengeTitle: { color: "white", fontSize: 20, fontWeight: "700" },
   challengeSubtitle: { color: "#dbeafe", fontSize: 14, marginTop: 2 },
 
@@ -366,6 +374,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginBottom: 8,
   },
+
   progressBar: { height: 8, backgroundColor: "white", borderRadius: 4 },
 
   achCard: {
@@ -379,6 +388,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 12,
   },
+
   achIcon: { fontSize: 34 },
   achTitle: { color: "white", fontSize: 16, fontWeight: "600" },
   achDesc: { color: "#94a3b8", fontSize: 13 },

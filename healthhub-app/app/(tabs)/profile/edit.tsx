@@ -34,21 +34,24 @@ export default function EditProfileScreen() {
     if (res.canceled) return;
 
     const picked = res.assets[0];
-    setForm((prev) => ({ ...prev, avatar: picked.uri })); // preview ngay
+
+    // preview local image
+    setForm((prev) => ({ ...prev, avatarUrl: picked.uri }));
 
     try {
       setUploading(true);
-      // UPLOAD ẢNH LÊN SERVER (Cloudinary hoặc backend)
-      const upload = await profileApi.uploadAvatar(picked.uri);
 
-      const imageUrl = upload.data.url;
-      updateField("avatarUrl", imageUrl);
+      const uploadUrl = await profileApi.uploadAvatar(picked.uri);
+
+      console.log("Uploaded URL:", uploadUrl);
+      updateField("avatarUrl", uploadUrl);
     } catch (err) {
       console.log("Upload avatar error:", err);
     } finally {
       setUploading(false);
     }
   };
+
 
   const loadProfile = async () => {
     try {

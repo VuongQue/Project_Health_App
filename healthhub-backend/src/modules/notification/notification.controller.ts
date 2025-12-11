@@ -1,4 +1,12 @@
-import { Controller, Get, Patch, Param, UseGuards, Req } from '@nestjs/common';
+// src/notifications/notification.controller.ts
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
@@ -12,13 +20,19 @@ export class NotificationController {
     return this.notiService.getMyNotifications(req.user);
   }
 
-  @Patch(':id/read')
-  markRead(@Param('id') id: number) {
-    return this.notiService.markAsRead(id);
-  }
   @Get('unread-count')
   async getUnread(@Req() req) {
-  const count = await this.notiService.getUnreadCount(req.user);
-  return { count: count ?? 0 };
-}
+    const count = await this.notiService.getUnreadCount(req.user);
+    return { count };
+  }
+
+  @Patch(':id/read')
+  markRead(@Param('id') id: string, @Req() req) {
+    return this.notiService.markAsRead(Number(id), req.user);
+  }
+
+  @Patch('read-all')
+  markAllRead(@Req() req) {
+    return this.notiService.markAllAsRead(req.user);
+  }
 }

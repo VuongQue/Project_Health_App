@@ -9,7 +9,8 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 
 @WebSocketGateway({
-  cors: { origin: '*' }, // cho phép kết nối từ frontend
+  cors: { origin: '*' },
+  namespace: '/notifications', // FE sẽ connect vào /notifications
 })
 export class NotificationGateway {
   @WebSocketServer()
@@ -25,14 +26,17 @@ export class NotificationGateway {
     this.logger.log(`❌ Client disconnected: ${client.id}`);
   }
 
-  // Emit từ backend khi có thông báo mới
+  // backend dùng chỗ này để gửi noti xuống 1 user
   sendNotificationToUser(userId: number, payload: any) {
     this.server.to(`user_${userId}`).emit('notification', payload);
   }
 
-  // Frontend sẽ emit “registerUser” để join vào room riêng
+  // FE gọi registerUser để join room riêng
   @SubscribeMessage('registerUser')
-  handleRegister(@MessageBody() userId: number, @ConnectedSocket() client: Socket) {
+  handleRegister(
+    @MessageBody() userId: number,
+    @ConnectedSocket() client: Socket,
+  ) {
     client.join(`user_${userId}`);
     this.logger.log(`👤 User ${userId} joined room user_${userId}`);
   }
