@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
@@ -11,29 +12,43 @@ import { LoginDto } from './dto/login.dto';
 import { AuthProvider } from '../users/entities/user.entity';
 import { EmailService } from '../email/email.service';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { ClientKafka } from '@nestjs/microservices';
+import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
+
+import { NotificationType } from '../notification/entities/notification.entity';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
-    private emailService: EmailService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
+
+    // 🔥 Kafka producer
+    @Inject('KAFKA_CLIENT')
+    private readonly kafka: ClientKafka,
   ) {}
 
+  // =========================
+  // UTILS
+  // =========================
   private generateOtp() {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
+  // =========================
+  // REGISTER
+  // =========================
   async register(dto: RegisterDto) {
     const existing = await this.usersService.findByEmail(dto.email);
-    if (existing) throw new BadRequestException('Email already registered');
+    if (existing) {
+      throw new BadRequestException('Email already registered');
+    }
 
     const hash = await bcrypt.hash(dto.password, 10);
-
-    // Generate OTP
     const otp = this.generateOtp();
 
-    const user = await this.usersService.create({
+    await this.usersService.create({
       fullName: dto.fullName,
       email: dto.email,
       password: hash,
@@ -51,20 +66,25 @@ export class AuthService {
     };
   }
 
+  // =========================
+  // VERIFY OTP
+  // =========================
   async verifyOtp(dto: VerifyOtpDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) throw new BadRequestException('User not found');
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
 
-    // 🔥 LOG CHI TIẾT
-  console.log("======================================");
-  console.log("🔐 VERIFY OTP DEBUG LOG");
-  console.log("Email:", dto.email);
-  console.log("OTP client gửi:", dto.otp);
-  console.log("OTP trong DB:", user.otpCode);
-  console.log("OTP typeof:", typeof user.otpCode);
-  console.log("OTP Expire At:", user.otpExpiresAt);
-  console.log("Now:", new Date());
-  console.log("======================================");
+    // ---- DEBUG (có thể xoá sau) ----
+    console.log('======================================');
+    console.log('🔐 VERIFY OTP DEBUG LOG');
+    console.log('Email:', dto.email);
+    console.log('OTP client gửi:', dto.otp);
+    console.log('OTP trong DB:', user.otpCode);
+    console.log('OTP Expire At:', user.otpExpiresAt);
+    console.log('Now:', new Date());
+    console.log('======================================');
+    // --------------------------------
 
     if (user.isVerified) {
       return { message: 'Account is already verified.' };
@@ -78,31 +98,57 @@ export class AuthService {
       throw new BadRequestException('OTP expired');
     }
 
-
+    // ✅ VERIFY OK
     user.isVerified = true;
     user.otpCode = null;
     user.otpExpiresAt = null;
 
     await this.usersService.save(user);
 
-    // After verification → login token
+    // 🔥🔥🔥 EMIT WELCOME NOTIFICATION (KAFKA EVENT)
+    // ❗ không await → auth không bị block nếu Kafka lỗi
+    this.kafka.emit(
+      TOPIC_NOTIFICATION_EVENTS,
+      {
+        userId: user.id,
+        type: NotificationType.SYSTEM,
+        message:
+          '🎉 Chào mừng bạn đến với HealthHub! Hãy bắt đầu hành trình chăm sóc sức khỏe ngay hôm nay 💪',
+        priority: 1,
+      },
+    );
+
+
+
+    // Trả token đăng nhập
     return this.generateTokens(user.id, user.email);
   }
 
+  // =========================
+  // LOGIN
+  // =========================
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
-    if (!user.isVerified)
+    if (!user.isVerified) {
       throw new UnauthorizedException('Email not verified');
+    }
 
     const match = await bcrypt.compare(dto.password, user.password);
-    if (!match) throw new UnauthorizedException('Invalid credentials');
+    if (!match) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     return this.generateTokens(user.id, user.email);
   }
 
-  generateTokens(userId: number, email: string) {
+  // =========================
+  // TOKEN
+  // =========================
+  private generateTokens(userId: number, email: string) {
     const payload = { sub: userId, email };
 
     const accessToken = this.jwtService.sign(payload, {

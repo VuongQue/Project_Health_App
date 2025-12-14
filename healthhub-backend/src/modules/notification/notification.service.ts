@@ -1,47 +1,21 @@
+// notification.service.ts
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification, NotificationType } from './entities/notification.entity';
-import { User } from '../users/entities/user.entity';
 import { NotificationGateway } from './notification.gateway';
 
 @Injectable()
 export class NotificationService {
   constructor(
     @InjectRepository(Notification)
-    private notiRepo: Repository<Notification>,
-    private gateway: NotificationGateway,
+    private readonly notiRepo: Repository<Notification>,
+    private readonly gateway: NotificationGateway,
   ) {}
 
-  async create(
-    user: User,
-    type: NotificationType,
-    message: string,
-    options?: {
-      icon?: string;
-      link?: string;
-      metadata?: any;
-      priority?: number;
-    },
-  ) {
-    const noti = this.notiRepo.create({
-      user,
-      type,
-      message,
-      icon: options?.icon,
-      link: options?.link,
-      metadata: options?.metadata,
-      priority: options?.priority ?? 1,
-    });
-
-    const saved = await this.notiRepo.save(noti);
-
-    // Realtime push
-    this.gateway.sendNotificationToUser(user.id, saved);
-
-    return saved;
-  }
-
+  // =====================================================
+  // CREATE (Kafka / Internal)
+  // =====================================================
   async createForUserId(
     userId: number,
     type: NotificationType,
@@ -53,46 +27,98 @@ export class NotificationService {
       priority?: number;
     },
   ) {
-    const user = { id: userId } as User; // lightweight ref
-    return this.create(user, type, message, options);
+    if (!userId) {
+      throw new Error('Invalid userId when creating notification');
+    }
+
+    const noti = this.notiRepo.create({
+      userId,                     // 🔥 QUAN TRỌNG NHẤT
+      type,
+      message,
+      icon: options?.icon,
+      link: options?.link,
+      metadata: options?.metadata,
+      priority: options?.priority ?? 1,
+      isRead: false,
+    });
+
+    const saved = await this.notiRepo.save(noti);
+
+    // 🔔 realtime push (nếu user đang online)
+    this.gateway.sendNotificationToUser(userId, saved);
+
+    return saved;
   }
 
-  async getMyNotifications(user: User) {
+  // =====================================================
+  // READ
+  // =====================================================
+  async getMyNotifications(userId: number) {
+    if (!userId) return [];
+
     return this.notiRepo.find({
-      where: { user: { id: user.id } },
-      order: { createdAt: 'DESC', priority: 'DESC' },
+      where: { userId },
+      order: {
+        priority: 'DESC',
+        createdAt: 'DESC',
+      },
     });
   }
 
-  async markAsRead(id: number, user: User) {
-    const noti = await this.notiRepo.findOne({
-      where: { id },
-      relations: ['user'],
+  async getUnreadCount(userId: number) {
+    if (!userId) return 0;
+
+    return this.notiRepo.count({
+      where: {
+        userId,
+        isRead: false,
+      },
     });
-    if (!noti) throw new NotFoundException('Notification not found');
-    if (noti.user.id !== user.id) {
-      throw new ForbiddenException();
+  }
+
+  // =====================================================
+  // UPDATE
+  // =====================================================
+  async markAsRead(notificationId: number, userId: number) {
+    const noti = await this.notiRepo.findOne({
+      where: { id: notificationId },
+    });
+
+    if (!noti) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    if (noti.userId !== userId) {
+      throw new ForbiddenException('You cannot access this notification');
     }
 
     if (!noti.isRead) {
       noti.isRead = true;
       await this.notiRepo.save(noti);
     }
+
     return noti;
   }
 
-  async markAllAsRead(user: User) {
+  async markAllAsRead(userId: number) {
+    if (!userId) return { success: true };
+
     await this.notiRepo.update(
-      { user: { id: user.id }, isRead: false },
+      { userId },
       { isRead: true },
     );
+
     return { success: true };
   }
 
-  async getUnreadCount(user: User) {
-    const count = await this.notiRepo.count({
-      where: { user: { id: user.id }, isRead: false },
-    });
-    return count ?? 0;
+  // =====================================================
+  // DELETE
+  // =====================================================
+  async clearAll(userId: number) {
+    if (!userId) return { success: true };
+
+    await this.notiRepo.delete({ userId });
+
+    return { success: true };
   }
 }

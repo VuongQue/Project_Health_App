@@ -1,13 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { MoodEntry } from './schemas/mood-entry.schema';
 import { CreateMoodDto } from './dto/create-mood.dto';
 
+import { ClientKafka } from '@nestjs/microservices';
+import { NotificationType } from '../notification/entities/notification.entity';
+import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
+
+
 @Injectable()
 export class MoodService {
+  private readonly logger = new Logger(MoodService.name);
   constructor(
     @InjectModel(MoodEntry.name) private moodModel: Model<MoodEntry>,
+    @Inject('KAFKA_CLIENT')
+    private readonly kafka: ClientKafka,
   ) {}
 
   // Chuẩn hoá date về 00:00:00 để so sánh theo ngày
@@ -21,25 +29,90 @@ export class MoodService {
   async create(userId: string, dto: CreateMoodDto) {
     const date = this.normalizeDate(dto.date ? new Date(dto.date) : new Date());
 
+    this.logger.log(
+      `[MOOD][CREATE] userId=${userId}, date=${date.toISOString()}, score=${dto.mood?.score}`,
+    );
+
+    // 1️⃣ Nếu đã có mood hôm nay → update (KHÔNG bắn notification)
     const existing = await this.moodModel.findOne({ userId, date });
-    if (existing) {
-      existing.mood = dto.mood; // dto.mood.score đã là 1..5
-      existing.note = dto.note;
-      existing.tags = dto.tags;
-      await existing.save();
-      return existing;
+      if (existing) {
+        this.logger.warn(
+          `[MOOD][UPDATE] existing mood found → update only (no notification)`,
+        );
+
+        existing.mood = dto.mood;
+        existing.note = dto.note;
+        existing.tags = dto.tags;
+
+        await existing.save();
+        return existing;
+      }
+
+      // 2️⃣ Tạo mood mới cho hôm nay
+      const mood = new this.moodModel({
+        userId,
+        date,
+        mood: dto.mood,
+        note: dto.note,
+        tags: dto.tags,
+      });
+
+      const saved = await mood.save();
+
+      this.logger.log(
+        `[MOOD][CREATE] new mood saved with id=${saved._id}`,
+      );
+
+      // =========================
+      // 🔔 NOTIFICATION: TRACK MOOD
+      // =========================
+      try {
+        this.logger.log(`[MOOD][NOTI] emit TRACK_MOOD notification`);
+
+        this.kafka.emit(TOPIC_NOTIFICATION_EVENTS, {
+          userId: Number(userId),
+          type: NotificationType.MOOD,
+          message: '😊 Bạn vừa ghi lại cảm xúc hôm nay. Cảm ơn bạn đã quan tâm đến bản thân!',
+          metadata: {
+            moodScore: dto.mood.score,
+            date: date.toISOString(),
+          },
+          priority: 1,
+        });
+      } catch (err) {
+        this.logger.error('[MOOD][NOTI] emit TRACK_MOOD failed', err);
+      }
+
+      // =========================
+      // 🔥 STREAK CHECK (7 / 14 / 21 / ...)
+      // =========================
+      try {
+        const { streak } = await this.getStreak(userId);
+
+        this.logger.log(`[MOOD][STREAK] current streak=${streak}`);
+
+        if (streak > 0 && streak % 7 === 0) {
+          this.logger.log(
+            `[MOOD][STREAK] 🎉 milestone reached: ${streak} days`,
+          );
+
+          this.kafka.emit(TOPIC_NOTIFICATION_EVENTS, {
+            userId: Number(userId),
+            type: NotificationType.MOOD,
+            message: `🔥 Tuyệt vời! Bạn đã duy trì theo dõi mood ${streak} ngày liên tiếp!`,
+            metadata: {
+              streak,
+              milestone: 'MOOD_STREAK',
+            },
+            priority: 2,
+          });
+        }
+      } catch (err) {
+        this.logger.error('[MOOD][STREAK] check failed', err);
+      }
+
+      return saved;
     }
-
-    const mood = new this.moodModel({
-      userId,
-      date,
-      mood: dto.mood, // score = 1..5
-      note: dto.note,
-      tags: dto.tags,
-    });
-
-    return mood.save();
-  }
 
   // Hôm nay — trả đúng 1..5
   async getToday(userId: string) {

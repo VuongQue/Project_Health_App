@@ -9,12 +9,14 @@ import { WorkoutSession } from './entities/workout-session.entity';
 import { WorkoutExercise } from './entities/workout-exercise.entity';
 import { UsersModule } from '../users/users.module';
 import { ElasticsearchModule } from '../elasticsearch/elasticsearch.module';
+import { KafkaModule } from '../kafka/kafka.module';
 
 @Module({
   imports: [
     UsersModule,
     ElasticsearchModule,
     TypeOrmModule.forFeature([Workout, WorkoutLog, WorkoutPlan, WorkoutSession, WorkoutExercise]),
+    KafkaModule,
   ],
   controllers: [FitnessController],
   providers: [FitnessService],

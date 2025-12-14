@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
 import { startOfDay, subDays } from 'date-fns';
@@ -16,6 +16,13 @@ import { WorkoutFilterDto } from './dto/workout-filter.dto';
 
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
+
+import { ClientKafka } from '@nestjs/microservices';
+
+import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
+import { NotificationType } from '../notification/entities/notification.entity';
+
+
 
 import {
   startOfWeek,
@@ -51,7 +58,10 @@ export class FitnessService {
 
     private usersService: UsersService,
 
-    private workoutSearch: WorkoutSearchService, // ⬅️ ES service
+    private workoutSearch: WorkoutSearchService,
+
+    @Inject('KAFKA_CLIENT')
+    private readonly kafka: ClientKafka, 
   ) {}
 
   // ======================================================
@@ -60,7 +70,13 @@ export class FitnessService {
   async findAllWorkouts(filter?: WorkoutFilterDto) {
     const ids = await this.workoutSearch.searchWorkouts(filter || {});
 
-    if (!ids.length) return [];
+    // 🔥 FALLBACK: nếu ES chưa có data → lấy từ DB
+    if (!ids.length) {
+      return this.workoutRepo.find({
+        relations: ['exercises'],
+        order: { createdAt: 'DESC' },
+      });
+    }
 
     return this.workoutRepo.find({
       where: { id: In(ids) },
@@ -68,6 +84,7 @@ export class FitnessService {
       order: { createdAt: 'DESC' },
     });
   }
+
 
 
   // ======================================================
@@ -385,12 +402,13 @@ export class FitnessService {
       where: { id: sessionId, user: { id: user.id } },
       relations: ['workout'],
     });
-
     if (!session) throw new NotFoundException('Session not found');
 
+    // 1️⃣ Đánh dấu session hoàn thành
     session.completed = true;
     await this.sessionRepo.save(session);
 
+    // 2️⃣ Tạo log
     const durationMin = Math.max(1, Math.floor(dto.seconds / 60));
     const kcal = dto.calories;
 
@@ -401,11 +419,28 @@ export class FitnessService {
       kcal,
       startedAt: new Date(Date.now() - dto.seconds * 1000),
     });
-
     await this.logRepo.save(log);
+
+    // 3️⃣ 🔥 EMIT KAFKA NOTIFICATION
+    this.kafka.emit(
+      TOPIC_NOTIFICATION_EVENTS,
+      {
+        userId: user.id,
+        type: NotificationType.WORKOUT,
+        message: `💪 Bạn vừa hoàn thành bài tập "${session.workout.title}"! Tuyệt vời lắm 👏`,
+        metadata: {
+          workoutId: session.workout.id,
+          durationMin,
+          calories: kcal,
+        },
+        priority: 1,
+      },
+    );
+
 
     return { session, log };
   }
+
 
   async getSessionDetail(user: User, sessionId: number) {
     const session = await this.sessionRepo.findOne({

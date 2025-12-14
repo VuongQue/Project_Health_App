@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// app/notifications.tsx (hoặc đường dẫn bạn đang dùng)
+import React from "react";
 import {
   View,
   Text,
@@ -10,16 +11,15 @@ import {
 import {
   X,
   Award,
-  Users,
   Target,
   TrendingUp,
   Heart,
   LucideIcon,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
-import notificationApi from "../src/api/notificationApi";
+import { useNotifications } from "./NotificationContext";
 
-interface NotificationItem {
+interface NotificationItemUI {
   id: number;
   icon: LucideIcon;
   color: string;
@@ -29,50 +29,36 @@ interface NotificationItem {
   unread: boolean;
 }
 
-const NotificationsScreen: React.FC = () => {
-  const router = useRouter();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchNotifications = async () => {
-    try {
-      const res = await notificationApi.getAll();
-      // Backend trả về { id, type, message, isRead, createdAt }
-      const mapped = res.data.map((item: any) => ({
-        id: item.id,
-        icon:
-          item.type === "ACHIEVEMENT"
-            ? Award
-            : item.type === "CHALLENGE"
-            ? Target
-            : item.type === "EVENT"
-            ? TrendingUp
-            : Heart,
-        color:
-          item.type === "ACHIEVEMENT"
-            ? "#facc15"
-            : item.type === "CHALLENGE"
-            ? "#22c55e"
-            : item.type === "EVENT"
-            ? "#3b82f6"
-            : "#ef4444",
-        title: item.type,
-        message: item.message,
-        time: new Date(item.createdAt).toLocaleString(),
-        unread: !item.isRead,
-      }));
-      setNotifications(mapped);
-    } catch (err) {
-      if (err instanceof Error)
-        console.log("⚠️ Lỗi tải notifications:", err.message);
-    } finally {
-      setLoading(false);
-    }
+const mapNotiToUI = (item: any): NotificationItemUI => {
+  const type = item.type;
+  const base: NotificationItemUI = {
+    id: item.id,
+    icon: Heart,
+    color: "#ef4444",
+    title: type,
+    message: item.message,
+    time: new Date(item.createdAt).toLocaleString(),
+    unread: !item.isRead,
   };
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
+  if (type === "ACHIEVEMENT") {
+    return { ...base, icon: Award, color: "#facc15" };
+  }
+  if (type === "CHALLENGE") {
+    return { ...base, icon: Target, color: "#22c55e" };
+  }
+  if (type === "EVENT" || type === "PLAN" || type === "WORKOUT") {
+    return { ...base, icon: TrendingUp, color: "#3b82f6" };
+  }
+
+  return base;
+};
+
+const NotificationsScreen: React.FC = () => {
+  const router = useRouter();
+  const { notifications, loading, clearAll, markAllAsRead } = useNotifications();
+
+  const mapped: NotificationItemUI[] = notifications.map(mapNotiToUI);
 
   return (
     <ScrollView style={styles.container}>
@@ -80,7 +66,7 @@ const NotificationsScreen: React.FC = () => {
         <View>
           <Text style={styles.title}>Notifications</Text>
           <Text style={styles.subtitle}>
-            {notifications.filter((n) => n.unread).length} new updates
+            {mapped.filter((n) => n.unread).length} new updates
           </Text>
         </View>
         <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
@@ -88,16 +74,31 @@ const NotificationsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+        <TouchableOpacity
+          style={[styles.chipBtn]}
+          onPress={markAllAsRead}
+        >
+          <Text style={styles.chipText}>Mark all as read</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.chipBtn]}
+          onPress={clearAll}
+        >
+          <Text style={styles.chipText}>Clear all</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
         <ActivityIndicator color="#2563eb" style={{ marginTop: 30 }} />
       ) : (
         <View style={{ marginTop: 16 }}>
-          {notifications.length === 0 ? (
+          {mapped.length === 0 ? (
             <Text style={{ color: "#94a3b8", textAlign: "center" }}>
               No notifications yet.
             </Text>
           ) : (
-            notifications.map((item) => {
+            mapped.map((item) => {
               const Icon = item.icon;
               return (
                 <View
@@ -134,20 +135,12 @@ const NotificationsScreen: React.FC = () => {
           )}
         </View>
       )}
-
-      <TouchableOpacity
-        style={styles.clearBtn}
-        onPress={() => notificationApi.clearAll().then(fetchNotifications)}
-      >
-        <Text style={styles.clearText}>Clear All Notifications</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 };
 
 export default NotificationsScreen;
 
-// 💅 styles giữ nguyên
 const styles = StyleSheet.create({
   container: { backgroundColor: "#0f172a", flex: 1, padding: 16 },
   header: {
@@ -162,6 +155,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 8,
   },
+  chipBtn: {
+    backgroundColor: "#1e293b",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  chipText: { color: "#cbd5e1", fontSize: 12 },
   notificationCard: {
     backgroundColor: "#1e293b",
     borderRadius: 16,
@@ -188,12 +188,4 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginTop: 4,
   },
-  clearBtn: {
-    marginTop: 10,
-    backgroundColor: "#1e293b",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  clearText: { color: "#cbd5e1" },
 });

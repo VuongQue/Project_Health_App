@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -23,6 +24,22 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
   // -----------------------
 
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.KAFKA,
+    options: {
+      client: {
+        clientId: 'healthhub-notification',
+        brokers: (process.env.KAFKA_BROKERS ?? 'localhost:9094').split(','),
+      },
+      consumer: {
+        groupId: 'notification-service-group',
+      },
+    },
+  });
+
+
+  await app.startAllMicroservices();
+
   app.useLogger(['error', 'warn', 'log']);
   const port = process.env.PORT || 4000;
   await app.listen(port);
@@ -30,5 +47,6 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   logger.log(`🚀 Application is running on: http://localhost:${port}`);
   logger.log(`📘 Swagger Docs at http://localhost:${port}/api/docs`);
+  logger.log(`🟠 Kafka consumer connected`);
 }
 bootstrap();

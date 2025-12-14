@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   CreateDateColumn,
+  JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
@@ -23,7 +24,11 @@ export class Notification {
   id: number;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'userId' })   // 🔥 BẮT BUỘC
   user: User;
+
+  @Column()
+  userId: number;                   // 🔥 BẮT BUỘC
 
   @Column({ type: 'enum', enum: NotificationType })
   type: NotificationType;
@@ -35,7 +40,7 @@ export class Notification {
   icon?: string;
 
   @Column({ nullable: true })
-  link?: string; // deep-link cho FE (vd: /plan/123)
+  link?: string;
 
   @Column({ type: 'json', nullable: true })
   metadata?: any;

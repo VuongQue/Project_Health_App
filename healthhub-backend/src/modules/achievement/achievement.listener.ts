@@ -1,3 +1,4 @@
+// src/modules/achievement/achievement.listener.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -5,7 +6,7 @@ import { Achievement } from './entities/achievement.entity';
 import { UserAchievement } from './entities/user-achievement.entity';
 import { User } from '../users/entities/user.entity';
 import { NotificationService } from '../notification/notification.service';
-import { NotificationGateway } from '../notification/notification.gateway';
+import { NotificationType } from '../notification/entities/notification.entity';
 
 @Injectable()
 export class AchievementListener {
@@ -13,33 +14,62 @@ export class AchievementListener {
 
   constructor(
     @InjectRepository(Achievement)
-    private achRepo: Repository<Achievement>,
+    private readonly achRepo: Repository<Achievement>,
+
     @InjectRepository(UserAchievement)
-    private userAchRepo: Repository<UserAchievement>,
-    private notiService: NotificationService,
-    private notiGateway: NotificationGateway,
+    private readonly userAchRepo: Repository<UserAchievement>,
+
+    private readonly notiService: NotificationService,
   ) {}
 
   async unlockAchievement(user: User, code: string) {
-    const achievement = await this.achRepo.findOne({ where: { code } });
+    // 1️⃣ Tìm achievement theo code
+    const achievement = await this.achRepo.findOne({
+      where: { code },
+    });
+
     if (!achievement) {
       this.logger.warn(`Achievement code not found: ${code}`);
       return null;
     }
 
+    // 2️⃣ Check user đã có achievement chưa
     const already = await this.userAchRepo.findOne({
-      where: { user: { id: user.id }, achievement: { id: achievement.id } },
-      relations: ['user', 'achievement'],
+      where: {
+        user: { id: user.id },
+        achievement: { id: achievement.id },
+      },
     });
 
-    if (already) return null; // đã có rồi
+    if (already) return null;
 
-    const record = this.userAchRepo.create({ user, achievement });
+    // 3️⃣ Lưu user-achievement
+    const record = this.userAchRepo.create({
+      user,
+      achievement,
+    });
     await this.userAchRepo.save(record);
+
+    // 4️⃣ Tạo notification
     const msg = `Chúc mừng bạn đã đạt được huy hiệu "${achievement.name}" 🏅`;
-    await this.notiService.create(user, 'ACHIEVEMENT', msg);
-    this.notiGateway.sendNotificationToUser(user.id, { type: 'ACHIEVEMENT', message: msg });
-    this.logger.log(`🏅 User ${user.email} earned achievement: ${achievement.name}`);
+
+    await this.notiService.createForUserId(
+      user.id,                         // 🔥 CHỈ TRUYỀN userId
+      NotificationType.ACHIEVEMENT,
+      msg,
+      {
+        metadata: {
+          achievementCode: achievement.code,
+          achievementId: achievement.id,
+        },
+        priority: 2,
+      },
+    );
+
+    this.logger.log(
+      `🏅 User ${user.email} earned achievement: ${achievement.name}`,
+    );
+
     return record;
   }
 }

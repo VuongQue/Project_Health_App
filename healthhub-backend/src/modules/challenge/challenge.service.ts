@@ -7,6 +7,7 @@ import { UsersService } from '../users/users.service';
 import { AchievementListener } from '../achievement/achievement.listener';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGateway } from '../notification/notification.gateway';
+import { NotificationType } from '../notification/entities/notification.entity';
 
 @Injectable()
 export class ChallengeService {
@@ -20,7 +21,6 @@ export class ChallengeService {
     private usersService: UsersService,
     private achListener: AchievementListener,
     private notiService: NotificationService,
-    private notiGateway: NotificationGateway,
   ) {}
 
   // ================= CREATE CHALLENGE =================
@@ -41,7 +41,6 @@ export class ChallengeService {
     const challenge = await this.challengeRepo.findOne({ where: { id: challengeId } });
     if (!challenge) throw new NotFoundException(`Challenge ${challengeId} not found`);
 
-    // Check duplicate join
     const existed = await this.userChallengeRepo.findOne({
       where: { user: { id: user.id }, challenge: { id: challengeId } },
     });
@@ -68,11 +67,9 @@ export class ChallengeService {
       relations: ['challenge'],
     });
 
-    
     return list.map((uc) => {
       const total = uc.challenge.durationDays;
       const completed = uc.completedDays;
-      const progress = completed / total;
       const remaining = total - completed;
 
       return {
@@ -83,7 +80,7 @@ export class ChallengeService {
         durationDays: total,
         completedDays: completed,
         daysRemaining: remaining,
-        progress,
+        progress: completed / total,
         status: uc.status,
         joinedAt: uc.joinedAt,
       };
@@ -107,7 +104,6 @@ export class ChallengeService {
 
     const today = new Date().toISOString().slice(0, 10);
 
-    // Không cho complete 2 lần trong 1 ngày
     if (uc.lastCompletedDate === today) {
       throw new BadRequestException('Hôm nay bạn đã đánh dấu rồi');
     }
@@ -119,17 +115,18 @@ export class ChallengeService {
     if (uc.completedDays >= uc.challenge.durationDays) {
       uc.status = 'completed';
 
-      // Gửi notification hoàn thành challenge
-      await this.notiService.create(
-        user,
-        'CHALLENGE',
-        `Bạn đã hoàn thành thử thách "${uc.challenge.name}"!`,
+      const msg = `Bạn đã hoàn thành thử thách "${uc.challenge.name}"!`;
+
+      // 🔥 FIX LỖI: không dùng string nữa, dùng enum
+      await this.notiService.createForUserId(
+        user.id,
+        NotificationType.CHALLENGE,
+        msg,
       );
 
-      this.notiGateway.sendNotificationToUser(user.id, {
-        type: 'CHALLENGE',
-        message: `Bạn đã hoàn thành thử thách "${uc.challenge.name}"!`,
-      });
+
+      // ❌ XÓA realtime thủ công (gateway) để tránh gửi 2 lần
+      // this.notiGateway.sendNotificationToUser(...) ← KHÔNG CẦN NỮA
 
       // Achievement: First Challenge Completed
       const completedCount = await this.userChallengeRepo.count({
@@ -152,6 +149,7 @@ export class ChallengeService {
     };
   }
 
+  // ================= ACTIVE CHALLENGES ==================
   async getUserActiveChallenges(userId: number) {
     const list = await this.userChallengeRepo.find({
       where: {
@@ -164,7 +162,6 @@ export class ChallengeService {
     return list.map((uc) => {
       const total = uc.challenge.durationDays;
       const completed = uc.completedDays;
-      const progress = completed / total;
 
       return {
         id: uc.id,
@@ -173,10 +170,9 @@ export class ChallengeService {
         description: uc.challenge.description,
         durationDays: total,
         completedDays: completed,
-        progress,
+        progress: completed / total,
         status: uc.status,
       };
     });
   }
-
 }
