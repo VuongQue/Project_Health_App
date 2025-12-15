@@ -4,9 +4,10 @@ import { MoodService } from './mood.service';
 import { MoodController } from './mood.controller';
 import { MoodEntry, MoodEntrySchema } from './schemas/mood-entry.schema';
 import { KafkaModule } from '../kafka/kafka.module';
+import { ChallengeModule } from '../challenge/challenge.module';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: MoodEntry.name, schema: MoodEntrySchema }]), KafkaModule],
+  imports: [MongooseModule.forFeature([{ name: MoodEntry.name, schema: MoodEntrySchema }]), KafkaModule, ChallengeModule,],
   controllers: [MoodController],
   providers: [MoodService],
 })

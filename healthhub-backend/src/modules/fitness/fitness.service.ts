@@ -22,6 +22,7 @@ import { ClientKafka } from '@nestjs/microservices';
 import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
 import { NotificationType } from '../notification/entities/notification.entity';
 
+import { ChallengeEngineService } from '../challenge/challenge-engine.service';
 
 
 import {
@@ -62,6 +63,7 @@ export class FitnessService {
 
     @Inject('KAFKA_CLIENT')
     private readonly kafka: ClientKafka, 
+    private readonly challengeEngine: ChallengeEngineService,
   ) {}
 
   // ======================================================
@@ -437,6 +439,23 @@ export class FitnessService {
       },
     );
 
+    try {
+      await this.challengeEngine.handleUserAction({
+        userId: user.id,
+        source: 'WORKOUT',
+        payload: {
+          workoutId: session.workout.id,
+          calories: kcal,
+          durationMin,
+        },
+      });
+
+      console.log(
+        `[WORKOUT][CHALLENGE] progress updated for userId=${user.id}`,
+      );
+    } catch (err) {
+      console.error('[WORKOUT][CHALLENGE] engine failed', err);
+    }
 
     return { session, log };
   }

@@ -8,6 +8,9 @@ import { ClientKafka } from '@nestjs/microservices';
 import { NotificationType } from '../notification/entities/notification.entity';
 import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
 
+import { ChallengeEngineService } from '../challenge/challenge-engine.service';
+
+
 
 @Injectable()
 export class MoodService {
@@ -16,6 +19,7 @@ export class MoodService {
     @InjectModel(MoodEntry.name) private moodModel: Model<MoodEntry>,
     @Inject('KAFKA_CLIENT')
     private readonly kafka: ClientKafka,
+    private readonly challengeEngine: ChallengeEngineService,
   ) {}
 
   // Chuẩn hoá date về 00:00:00 để so sánh theo ngày
@@ -63,6 +67,21 @@ export class MoodService {
         `[MOOD][CREATE] new mood saved with id=${saved._id}`,
       );
 
+      try {
+        await this.challengeEngine.handleUserAction({
+          userId: Number(userId),
+          source: 'MOOD',
+          payload: {
+            score: dto.mood.score, // 1..5
+          },
+        });
+
+        this.logger.log(
+          `[MOOD][CHALLENGE] progress updated for userId=${userId}`,
+        );
+      } catch (err) {
+        this.logger.error('[MOOD][CHALLENGE] engine failed', err);
+      }
       // =========================
       // 🔔 NOTIFICATION: TRACK MOOD
       // =========================

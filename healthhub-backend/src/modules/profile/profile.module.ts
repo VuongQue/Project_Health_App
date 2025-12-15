@@ -7,6 +7,7 @@ import { FitnessModule } from '../fitness/fitness.module';
 import { AchievementModule } from '../achievement/achievement.module';
 import { ChallengeModule } from '../challenge/challenge.module';
 
+
 @Module({
   imports: [
     UsersModule,

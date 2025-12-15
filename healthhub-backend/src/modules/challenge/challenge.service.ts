@@ -1,155 +1,177 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Challenge } from './entities/challenge.entity';
 import { UserChallenge } from './entities/user-challenge.entity';
-import { UsersService } from '../users/users.service';
-import { AchievementListener } from '../achievement/achievement.listener';
-import { NotificationService } from '../notification/notification.service';
-import { NotificationGateway } from '../notification/notification.gateway';
-import { NotificationType } from '../notification/entities/notification.entity';
+import { CreateChallengeDto } from './dto/create-challenge.dto';
+import { UpdateChallengeDto } from './dto/update-challenge.dto';
 
 @Injectable()
 export class ChallengeService {
   constructor(
-    @InjectRepository(Challenge)
-    private challengeRepo: Repository<Challenge>,
-
-    @InjectRepository(UserChallenge)
-    private userChallengeRepo: Repository<UserChallenge>,
-
-    private usersService: UsersService,
-    private achListener: AchievementListener,
-    private notiService: NotificationService,
+    @InjectRepository(Challenge) private challengeRepo: Repository<Challenge>,
+    @InjectRepository(UserChallenge) private userChallengeRepo: Repository<UserChallenge>,
   ) {}
 
-  // ================= CREATE CHALLENGE =================
-  async create(dto: any) {
-    const challenge = this.challengeRepo.create(dto);
-    return this.challengeRepo.save(challenge);
+  // Admin create
+  async create(dto: CreateChallengeDto) {
+    const c = this.challengeRepo.create({
+      ...dto,
+      isActive: dto.isActive ?? true,
+      isPublic: dto.isPublic ?? true,
+    });
+    return this.challengeRepo.save(c);
   }
 
-  getAll() {
-    return this.challengeRepo.find();
+  async update(id: number, dto: UpdateChallengeDto) {
+    const c = await this.challengeRepo.findOne({ where: { id } });
+    if (!c) throw new NotFoundException('Challenge not found');
+    Object.assign(c, dto);
+    return this.challengeRepo.save(c);
   }
 
-  // ================= JOIN CHALLENGE ===================
-  async join(userEmail: string, challengeId: number) {
-    const user = await this.usersService.findByEmail(userEmail);
-    if (!user) throw new NotFoundException(`User with email ${userEmail} not found`);
+  async deactivate(id: number) {
+    const c = await this.challengeRepo.findOne({ where: { id } });
+    if (!c) throw new NotFoundException('Challenge not found');
+    c.isActive = false;
+    return this.challengeRepo.save(c);
+  }
 
-    const challenge = await this.challengeRepo.findOne({ where: { id: challengeId } });
-    if (!challenge) throw new NotFoundException(`Challenge ${challengeId} not found`);
+  /**
+   * List challenge public + kèm trạng thái user đã join hay chưa
+   */
+  async listForUser(userId?: number) {
+    const challenges = await this.challengeRepo.find({
+      where: { isActive: true, isPublic: true },
+      order: { createdAt: 'DESC' },
+    });
+
+    // chưa login → chỉ xem public
+    if (!userId) {
+      return challenges.map((c) => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        type: c.type,
+        targetCount: c.targetCount,
+        durationDays: c.durationDays ?? null,
+        joined: false,
+      }));
+    }
+
+    const userChallenges = await this.userChallengeRepo.find({
+      where: {
+        user: { id: userId },
+        challenge: { id: In(challenges.map((c) => c.id)) },
+      },
+      relations: ['challenge'],
+    });
+
+    const map = new Map<number, UserChallenge>();
+    userChallenges.forEach((uc) => map.set(uc.challenge.id, uc));
+
+    return challenges.map((c) => {
+      const uc = map.get(c.id);
+
+      return {
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        type: c.type,
+        targetCount: c.targetCount,
+        durationDays: c.durationDays ?? null,
+
+        joined: !!uc,
+
+        userChallenge: uc
+          ? {
+              id: uc.id,
+              completedCount: uc.completedCount,
+              progress:
+                c.targetCount > 0
+                  ? uc.completedCount / c.targetCount
+                  : 0,
+              status: uc.status,
+              currentStreak: uc.currentStreak,
+              maxStreak: uc.maxStreak,
+            }
+          : null,
+      };
+    });
+    }
+
+
+  async join(userId: number, challengeId: number) {
+    const challenge = await this.challengeRepo.findOne({
+      where: { id: challengeId, isActive: true },
+    });
+    if (!challenge) throw new NotFoundException('Challenge not found');
 
     const existed = await this.userChallengeRepo.findOne({
-      where: { user: { id: user.id }, challenge: { id: challengeId } },
+      where: { user: { id: userId }, challenge: { id: challengeId } },
     });
-    if (existed) throw new BadRequestException('Bạn đã tham gia thử thách này rồi');
+    if (existed) {
+      throw new BadRequestException('Bạn đã tham gia thử thách này rồi');
+    }
 
     const record = this.userChallengeRepo.create({
-      user,
+      user: { id: userId } as any,
       challenge,
       status: 'ongoing',
-      completedDays: 0,
+      completedCount: 0,
+      currentStreak: 0,
+      maxStreak: 0,
       lastCompletedDate: null,
+      todayCount: 0,
+      todayKey: null,
     });
 
     return this.userChallengeRepo.save(record);
   }
 
-  // ================= USER CHALLENGES ===================
-  async myChallenges(userEmail: string) {
-    const user = await this.usersService.findByEmail(userEmail);
-    if (!user) throw new NotFoundException(`User with email ${userEmail} not found`);
 
-    const list = await this.userChallengeRepo.find({
-      where: { user: { id: user.id } },
-      relations: ['challenge'],
-    });
-
-    return list.map((uc) => {
-      const total = uc.challenge.durationDays;
-      const completed = uc.completedDays;
-      const remaining = total - completed;
-
-      return {
-        id: uc.id,
-        challengeId: uc.challenge.id,
-        name: uc.challenge.name,
-        description: uc.challenge.description,
-        durationDays: total,
-        completedDays: completed,
-        daysRemaining: remaining,
-        progress: completed / total,
-        status: uc.status,
-        joinedAt: uc.joinedAt,
-      };
-    });
-  }
-
-  // ================= COMPLETE ONE DAY ==================
-  async addProgress(userEmail: string, challengeUserId: number) {
-    const user = await this.usersService.findByEmail(userEmail);
-    if (!user) throw new NotFoundException(`User with email ${userEmail} not found`);
-
+  async leave(userId: number, userChallengeId: number) {
     const uc = await this.userChallengeRepo.findOne({
-      where: { id: challengeUserId, user: { id: user.id } },
-      relations: ['challenge'],
+      where: { id: userChallengeId, user: { id: userId } },
     });
-    if (!uc) throw new NotFoundException('Bạn chưa tham gia thử thách này');
-
-    if (uc.status === 'completed') {
-      throw new BadRequestException('Bạn đã hoàn thành thử thách này rồi');
-    }
-
-    const today = new Date().toISOString().slice(0, 10);
-
-    if (uc.lastCompletedDate === today) {
-      throw new BadRequestException('Hôm nay bạn đã đánh dấu rồi');
-    }
-
-    uc.completedDays += 1;
-    uc.lastCompletedDate = today;
-
-    // Nếu hoàn tất thử thách
-    if (uc.completedDays >= uc.challenge.durationDays) {
-      uc.status = 'completed';
-
-      const msg = `Bạn đã hoàn thành thử thách "${uc.challenge.name}"!`;
-
-      // 🔥 FIX LỖI: không dùng string nữa, dùng enum
-      await this.notiService.createForUserId(
-        user.id,
-        NotificationType.CHALLENGE,
-        msg,
-      );
-
-
-      // ❌ XÓA realtime thủ công (gateway) để tránh gửi 2 lần
-      // this.notiGateway.sendNotificationToUser(...) ← KHÔNG CẦN NỮA
-
-      // Achievement: First Challenge Completed
-      const completedCount = await this.userChallengeRepo.count({
-        where: { user: { id: user.id }, status: 'completed' },
-      });
-
-      if (completedCount === 1) {
-        await this.achListener.unlockAchievement(user, 'FIRST_CHALLENGE');
-      }
-    }
-
-    await this.userChallengeRepo.save(uc);
-
-    return {
-      message: 'Progress updated',
-      completedDays: uc.completedDays,
-      totalDays: uc.challenge.durationDays,
-      progress: uc.completedDays / uc.challenge.durationDays,
-      status: uc.status,
-    };
+    if (!uc) throw new NotFoundException('UserChallenge not found');
+    await this.userChallengeRepo.delete(uc.id);
+    return { message: 'Left challenge' };
   }
 
-  // ================= ACTIVE CHALLENGES ==================
+  async myChallenges(userId: number) {
+    const list = await this.userChallengeRepo.find({
+      where: { user: { id: userId } },
+      relations: ['challenge'],
+      order: { joinedAt: 'DESC' },
+    });
+
+    return list.map((uc) => ({
+      id: uc.id,
+      challengeId: uc.challenge.id,
+      name: uc.challenge.name,
+      description: uc.challenge.description,
+      type: uc.challenge.type,
+      targetCount: uc.challenge.targetCount,
+      completedCount: uc.completedCount,
+      progress: uc.challenge.targetCount ? uc.completedCount / uc.challenge.targetCount : 0,
+      status: uc.status,
+      currentStreak: uc.currentStreak,
+      maxStreak: uc.maxStreak,
+      lastCompletedDate: uc.lastCompletedDate,
+      joinedAt: uc.joinedAt,
+    }));
+  }
+
+  async getOneUserChallenge(userId: number, userChallengeId: number) {
+    const uc = await this.userChallengeRepo.findOne({
+      where: { id: userChallengeId, user: { id: userId } },
+      relations: ['challenge'],
+    });
+    if (!uc) throw new NotFoundException('UserChallenge not found');
+    return uc;
+  }
+
   async getUserActiveChallenges(userId: number) {
     const list = await this.userChallengeRepo.find({
       where: {
@@ -157,22 +179,26 @@ export class ChallengeService {
         status: 'ongoing',
       },
       relations: ['challenge'],
+      order: { joinedAt: 'DESC' },
     });
 
-    return list.map((uc) => {
-      const total = uc.challenge.durationDays;
-      const completed = uc.completedDays;
-
-      return {
-        id: uc.id,
-        challengeId: uc.challenge.id,
-        name: uc.challenge.name,
-        description: uc.challenge.description,
-        durationDays: total,
-        completedDays: completed,
-        progress: completed / total,
-        status: uc.status,
-      };
-    });
+    return list.map((uc) => ({
+      id: uc.id,
+      challengeId: uc.challenge.id,
+      name: uc.challenge.name,
+      description: uc.challenge.description,
+      type: uc.challenge.type,
+      targetCount: uc.challenge.targetCount,
+      completedCount: uc.completedCount,
+      progress:
+        uc.challenge.targetCount > 0
+          ? uc.completedCount / uc.challenge.targetCount
+          : 0,
+      currentStreak: uc.currentStreak,
+      maxStreak: uc.maxStreak,
+      lastCompletedDate: uc.lastCompletedDate,
+      joinedAt: uc.joinedAt,
+    }));
   }
+
 }

@@ -7,18 +7,16 @@ import {
   StyleSheet,
 } from "react-native";
 import { Bell, Flame, TrendingUp, Award, Target } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 
 import axiosClient from "@/src/api/axiosClient";
 import { profileApi } from "@/src/api/profileApi";
 import { IUserChallenge } from "@/src/types/challenge";
 import { useNotifications } from "@/app/notifications/NotificationContext";
+import ChallengeMiniCard from "@/components/challenge/ChallengeMiniCard";
 
 export default function DashboardScreen() {
   const router = useRouter();
-
-  // ⭐ LẤY UNREAD COUNT TỪ CONTEXT
   const { unreadCount } = useNotifications();
 
   const [userName, setUserName] = useState("User");
@@ -51,25 +49,20 @@ export default function DashboardScreen() {
     fetchDashboard();
   }, []);
 
-  // ================================
-  // USER INFO
-  // ================================
+  // ================= USER INFO =================
   const fetchUserInfo = async () => {
     try {
       const res = await profileApi.getMe();
       setUserName(res.data.user?.fullName || "User");
-    } catch (err: any) {
+    } catch (err) {
       console.log("⚠️ Error loading user info:", err);
     }
   };
 
-  // ================================
-  // DASHBOARD DATA
-  // ================================
+  // ================= DASHBOARD =================
   const fetchDashboard = async () => {
     try {
       const moodDash = await axiosClient.get("/moods/dashboard");
-
       const todayScore = normalizeMoodScore(
         moodDash.data?.today?.mood?.score
       );
@@ -88,21 +81,20 @@ export default function DashboardScreen() {
         challenges: challengeRes.data ?? [],
         achievements: achRes.data ?? [],
       });
-    } catch (err: any) {
+    } catch (err) {
       console.log("⚠️ Dashboard error:", err);
     }
   };
 
   return (
     <ScrollView style={styles.container}>
-      {/* HEADER */}
+      {/* ================= HEADER ================= */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>HealthHub</Text>
           <Text style={styles.subtitle}>Welcome back, {userName}</Text>
         </View>
 
-        {/* 🔔 CHUÔNG DÙNG CONTEXT */}
         <TouchableOpacity
           onPress={() => router.push("/notifications" as any)}
           style={styles.notifButton}
@@ -118,16 +110,15 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ==== MOOD CARD ==== */}
+      {/* ================= MOOD ================= */}
       <View style={styles.moodCard}>
         <Text style={styles.cardTitle}>Today's Mood</Text>
-
         <View style={styles.moodRow}>
           <Text style={styles.moodEmoji}>{summary.mood}</Text>
-
           <View style={{ flex: 1 }}>
-            <Text style={styles.moodStatus}>How are you feeling today?</Text>
-
+            <Text style={styles.moodStatus}>
+              How are you feeling today?
+            </Text>
             <View style={styles.moodOptions}>
               {MOOD_EMOJIS.map((emoji, idx) => (
                 <View
@@ -145,9 +136,8 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* ==== QUICK STATS ==== */}
+      {/* ================= QUICK STATS ================= */}
       <Text style={styles.sectionTitle}>Quick Stats</Text>
-
       <View style={styles.statsGrid}>
         <StatCard icon={<Flame size={18} color="#fb923c" />} label="Streak" value={summary.streak} sub="days" />
         <StatCard
@@ -169,11 +159,35 @@ export default function DashboardScreen() {
           sub="ongoing"
         />
       </View>
+
+      {/* ================= CHALLENGES ================= */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Challenges</Text>
+        <TouchableOpacity onPress={() => router.push("/challenges" as any)}>
+          <Text style={styles.seeAll}>View all</Text>
+        </TouchableOpacity>
+      </View>
+
+      {summary.challenges.length > 0 ? (
+        summary.challenges.slice(0, 2).map((c) => (
+          <ChallengeMiniCard key={c.id} challenge={c} />
+        ))
+      ) : (
+        <TouchableOpacity
+          style={styles.emptyCard}
+          onPress={() => router.push("/challenges" as any)}
+        >
+          <Text style={{ color: "#94a3b8" }}>
+            🚀 Join your first challenge
+          </Text>
+        </TouchableOpacity>
+      )}
+
     </ScrollView>
   );
 }
 
-/* ===================== REUSABLE CARD ======================= */
+/* ================= REUSABLE CARD ================= */
 
 function StatCard({
   icon,
@@ -198,10 +212,11 @@ function StatCard({
   );
 }
 
-/* ===================== STYLES ======================= */
+/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0f172a", padding: 16 },
+
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 22 },
   title: { color: "white", fontSize: 26, fontWeight: "700" },
   subtitle: { color: "#94a3b8", fontSize: 14 },
@@ -229,4 +244,64 @@ const styles = StyleSheet.create({
   statLabel: { color: "#94a3b8", fontSize: 13 },
   statValue: { color: "white", fontSize: 32, fontWeight: "700" },
   statSub: { color: "#94a3b8", fontSize: 12 },
+
+  challengeCard: {
+    backgroundColor: "#1e293b",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  challengeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  challengeTitle: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "600",
+    flex: 1,
+    paddingRight: 8,
+  },
+  challengePercent: {
+    color: "#22c55e",
+    fontWeight: "700",
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: "#0f172a",
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: 6,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#22c55e",
+  },
+  challengeSub: {
+    color: "#94a3b8",
+    fontSize: 12,
+  },
+
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 22,
+    marginBottom: 10,
+  },
+  seeAll: {
+    color: "#3b82f6",
+    fontWeight: "600",
+  },
+  emptyCard: {
+    backgroundColor: "#1e293b",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+    alignItems: "center",
+  },
+
 });

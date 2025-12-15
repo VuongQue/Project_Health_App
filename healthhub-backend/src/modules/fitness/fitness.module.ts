@@ -10,6 +10,7 @@ import { WorkoutExercise } from './entities/workout-exercise.entity';
 import { UsersModule } from '../users/users.module';
 import { ElasticsearchModule } from '../elasticsearch/elasticsearch.module';
 import { KafkaModule } from '../kafka/kafka.module';
+import { ChallengeModule } from '../challenge/challenge.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { KafkaModule } from '../kafka/kafka.module';
     ElasticsearchModule,
     TypeOrmModule.forFeature([Workout, WorkoutLog, WorkoutPlan, WorkoutSession, WorkoutExercise]),
     KafkaModule,
+    ChallengeModule,
   ],
   controllers: [FitnessController],
   providers: [FitnessService],
