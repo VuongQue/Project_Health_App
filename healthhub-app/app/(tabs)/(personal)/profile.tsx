@@ -13,10 +13,7 @@ import {
 import {
   Award,
   TrendingUp,
-  Target,
   Settings,
-  ChevronRight,
-  Trophy,
   Flame,
   Star,
   User,
@@ -27,7 +24,8 @@ import {
 import { useRouter } from "expo-router";
 import { clearToken } from "@/src/utils/tokenStorage";
 import { profileApi } from "@/src/api/profileApi";
-import { UserProfile, BadgeItem, ChallengeItem } from "@/src/types/profile";
+import { UserProfile } from "@/src/types/profile";
+import { ACHIEVEMENT_ICONS } from "@/src/icons/achievementIcons";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -38,19 +36,11 @@ export default function ProfileScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [showConfirmLogout, setShowConfirmLogout] = useState(false);
 
-  const loadProfile = async () => {
-    try {
-      const res = await profileApi.getMe();
-      setProfile(res.data);
-    } catch (err) {
-      console.log("Profile load error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadProfile();
+    profileApi
+      .getMe()
+      .then((res) => setProfile(res.data))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleLogout = async () => {
@@ -60,39 +50,19 @@ export default function ProfileScreen() {
 
   if (loading || !profile) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#3b82f6" />
       </View>
     );
   }
 
   const { user, stats, badges, challenges } = profile;
-
-  const statItems = [
-    {
-      label: "Total Workouts",
-      value: stats.totalWorkouts,
-      icon: TrendingUp,
-      color: "#3b82f6",
-    },
-    {
-      label: "Badges Earned",
-      value: stats.badgesEarned,
-      icon: Award,
-      color: "#a855f7",
-    },
-    {
-      label: "Current Streak",
-      value: stats.currentStreak,
-      icon: Flame,
-      color: "#f97316",
-    },
-  ];
+  const previewBadges = badges?.slice(0, 6) ?? [];
 
   return (
     <>
       <ScrollView style={styles.container}>
-        {/* HEADER */}
+        {/* ===== HEADER ===== */}
         <View style={styles.header}>
           <View style={styles.row}>
             <View style={styles.avatar}>
@@ -125,25 +95,29 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* STATS */}
+        {/* ===== STATS ===== */}
         <View style={styles.rowWrap}>
-          {statItems.map((stat, i) => {
-            const Icon = stat.icon;
-            return (
-              <View key={i} style={styles.statBox}>
-                <View
-                  style={[styles.iconBox, { backgroundColor: stat.color + "20" }]}
-                >
-                  <Icon color={stat.color} size={18} />
-                </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            );
-          })}
+          <StatBox
+            label="Total Workouts"
+            value={stats.totalWorkouts}
+            color="#3b82f6"
+            icon={TrendingUp}
+          />
+          <StatBox
+            label="Badges Earned"
+            value={stats.badgesEarned}
+            color="#a855f7"
+            icon={Award}
+          />
+          <StatBox
+            label="Current Streak"
+            value={stats.currentStreak}
+            color="#f97316"
+            icon={Flame}
+          />
         </View>
 
-        {/* CHALLENGES */}
+        {/* ===== CHALLENGES ===== */}
         <Text style={styles.sectionTitle}>Active Challenges</Text>
         {challenges?.map((ch, i) => (
           <View key={i} style={styles.challengeCard}>
@@ -160,35 +134,35 @@ export default function ProfileScreen() {
           </View>
         ))}
 
-        {/* BADGES */}
+        {/* ===== BADGES (UNLOCKED ONLY) ===== */}
         <View style={styles.badgeHeader}>
           <Text style={styles.sectionTitle}>Badges</Text>
-          <Text style={styles.linkText}>View All</Text>
+          <TouchableOpacity onPress={() => router.push("/achievements")}>
+            <Text style={styles.linkText}>View All</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.badgeGrid}>
-          {badges?.map((b, i) => (
-            <View key={i} style={styles.badgeCard}>
-              {b.iconUrl ? (
-                <Image source={{ uri: b.iconUrl }} style={styles.badgeImage} />
-              ) : (
-                <Award size={32} color="#facc15" />
-              )}
+          {previewBadges.map((b, i) => {
+            const code = b.code ?? "";
+            const Icon = ACHIEVEMENT_ICONS[code] || Award;
 
-              <Text style={styles.badgeName}>{b.name}</Text>
-              <Text style={styles.badgeDate}>{b.date}</Text>
-            </View>
-          ))}
+            return (
+              <View key={i} style={[styles.badgeCard, styles.badgeUnlocked]}>
+                <Icon size={28} color="#facc15" />
+                <Text style={styles.badgeName}>{b.name}</Text>
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
 
-      {/* SETTINGS MODAL */}
+      {/* ===== SETTINGS ===== */}
       <Modal visible={showSettings} transparent animationType="slide">
         <TouchableOpacity
           style={styles.modalOverlay}
           onPress={() => setShowSettings(false)}
         />
-
         <View style={styles.sheet}>
           <TouchableOpacity
             style={styles.sheetBtn}
@@ -214,7 +188,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* CONFIRM LOGOUT MODAL */}
+      {/* ===== LOGOUT CONFIRM ===== */}
       <Modal visible={showConfirmLogout} transparent animationType="fade">
         <View style={styles.centerBox}>
           <View style={styles.confirmBox}>
@@ -245,19 +219,37 @@ export default function ProfileScreen() {
   );
 }
 
-/* ---------------------- STYLES ---------------------- */
+/* ===== SMALL COMPONENT ===== */
+function StatBox({ label, value, icon: Icon, color }: any) {
+  return (
+    <View style={styles.statBox}>
+      <View style={[styles.iconBox, { backgroundColor: color + "20" }]}>
+        <Icon color={color} size={18} />
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+/* ===== STYLES ===== */
+// ⚠️ styles giữ nguyên như bạn đang dùng (không thay đổi)
+
+
+/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
   container: { backgroundColor: "#0f172a", flex: 1, padding: 16 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: 16,
   },
 
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  rowBetween: { flexDirection: "row", justifyContent: "space-between" },
 
   avatar: {
     width: 72,
@@ -285,7 +277,22 @@ const styles = StyleSheet.create({
   levelText: { color: "#60a5fa", fontSize: 11, marginLeft: 4 },
   points: { color: "#64748b", fontSize: 11 },
 
-  iconBtn: { backgroundColor: "#1e293b", padding: 8, borderRadius: 12 },
+  iconBtn: {
+  width: 44,             
+  height: 44,             
+  borderRadius: 14,
+  backgroundColor: "#1e293b",
+  alignItems: "center",
+  justifyContent: "center",
+  alignSelf: "center", 
+
+
+  shadowColor: "#000",
+  shadowOpacity: 0.25,
+  shadowRadius: 6,
+  elevation: 4,
+},
+
 
   rowWrap: {
     flexDirection: "row",
@@ -323,12 +330,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
   textWhite: { color: "white" },
   textMuted: { color: "#94a3b8", fontSize: 13 },
 
@@ -361,17 +362,30 @@ const styles = StyleSheet.create({
 
   badgeCard: {
     width: "30%",
-    backgroundColor: "#1e293b",
-    borderWidth: 1,
-    borderColor: "#334155",
     borderRadius: 16,
     alignItems: "center",
     padding: 10,
     marginBottom: 10,
+    borderWidth: 1,
   },
 
-  badgeName: { color: "white", fontSize: 12, textAlign: "center" },
-  badgeDate: { color: "#64748b", fontSize: 11 },
+  badgeUnlocked: {
+    backgroundColor: "#1e293b",
+    borderColor: "#facc15",
+  },
+
+  badgeLocked: {
+    backgroundColor: "#0f172a",
+    borderColor: "#334155",
+    opacity: 0.6,
+  },
+
+  badgeName: {
+    color: "white",
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 6,
+  },
 
   modalOverlay: {
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -398,14 +412,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#334155",
     marginBottom: 10,
   },
-
-  badgeImage: {
-  width: 48,
-  height: 48,
-  borderRadius: 24,
-  marginBottom: 6,
-},
-
 
   sheetText: { color: "white", fontSize: 16, fontWeight: "500" },
 

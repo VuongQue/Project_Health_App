@@ -9,6 +9,8 @@ import { NotificationType } from '../notification/entities/notification.entity';
 import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
 
 import { ChallengeEngineService } from '../challenge/challenge-engine.service';
+import { AchievementEngine } from '../achievement/achievement.engine';
+
 
 
 
@@ -20,6 +22,7 @@ export class MoodService {
     @Inject('KAFKA_CLIENT')
     private readonly kafka: ClientKafka,
     private readonly challengeEngine: ChallengeEngineService,
+    private readonly achievementEngine: AchievementEngine,
   ) {}
 
   // Chuẩn hoá date về 00:00:00 để so sánh theo ngày
@@ -62,6 +65,39 @@ export class MoodService {
       });
 
       const saved = await mood.save();
+
+      // ===============================
+      // 🏆 ACHIEVEMENT: MOOD
+      // ===============================
+      try {
+        // 1️⃣ Tổng số ngày đã ghi mood
+        const moodCount = await this.moodModel.countDocuments({ userId });
+
+        // 2️⃣ BIRTHDAY_MOOD (secret)
+        let birthday = 0;
+        if (dto.date) {
+          const today = new Date(dto.date);
+          // nếu user có birthday → so sánh ở đây
+          // (giả sử user.birthDate có ở user service / profile)
+          // 👉 nếu chưa có thì để 0
+        }
+
+        await this.achievementEngine.evaluate(
+          { id: Number(userId) } as any, // AchievementEngine chỉ cần user.id
+          'MOOD_CREATED',
+          {
+            moodCount,
+            birthday,
+          },
+        );
+
+        this.logger.log(
+          `[MOOD][ACHIEVEMENT] evaluated mood achievements for userId=${userId}`,
+        );
+      } catch (err) {
+        this.logger.error('[MOOD][ACHIEVEMENT] engine failed', err);
+      }
+
 
       this.logger.log(
         `[MOOD][CREATE] new mood saved with id=${saved._id}`,

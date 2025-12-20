@@ -5,7 +5,7 @@ import { Event } from './entities/event.entity';
 import { EventRegistration } from './entities/event-registration.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UsersService } from '../users/users.service';
-import { AchievementListener } from '../achievement/achievement.listener';
+import { AchievementEngine } from '../achievement/achievement.engine';
 
 @Injectable()
 export class EventService {
@@ -13,7 +13,7 @@ export class EventService {
     @InjectRepository(Event) private eventRepo: Repository<Event>,
     @InjectRepository(EventRegistration) private regRepo: Repository<EventRegistration>,
     private usersService: UsersService,
-    private achListener: AchievementListener,
+    private achEngine: AchievementEngine,
   ) {}
 
   async createEvent(userEmail: string, dto: CreateEventDto) {
@@ -41,9 +41,15 @@ export class EventService {
     //  Trao huy hiệu cho lần tham gia đầu tiên
     const count = await this.regRepo.count({ where: { user } });
     if (count === 1) {
-        await this.achListener.unlockAchievement(user, 'EVENT_JOINER');
+        await this.achEngine.evaluate(user.id, 'EVENT_JOIN', {
+        eventJoinCount: count,
+      });
+
     } else if (count >= 3) {
-        await this.achListener.unlockAchievement(user, 'EVENT_FAN');
+        await this.achEngine.evaluate(user.id, 'EVENT_FAN', {
+        eventJoinCount: count,
+      });
+
     }
 
     return reg;

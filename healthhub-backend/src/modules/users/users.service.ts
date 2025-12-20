@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not, ILike } from 'typeorm';
 import { User } from './entities/user.entity';
+import { AchievementEngine } from '../achievement/achievement.engine';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepo: Repository<User>,
+    private readonly achievementEngine: AchievementEngine,
   ) {}
 
   async save(user: User) {
@@ -96,9 +98,33 @@ export class UsersService {
   }
 
   async updateProfile(userId: number, dto: any) {
-    await this.usersRepo.update(userId, dto);
-    return this.getProfile(userId);
-  }
+  await this.usersRepo.update(userId, dto);
+
+  const user = await this.usersRepo.findOne({
+    where: { id: userId },
+  });
+
+  if (!user) throw new NotFoundException("User not found");
+
+  // ✅ CHECK PROFILE COMPLETE
+  const isProfileComplete =
+    !!user.fullName &&
+    !!user.username &&
+    !!user.avatarUrl;
+
+  // 🔥 GỌI ACHIEVEMENT ENGINE
+  await this.achievementEngine.evaluate(
+    user.id,
+    "PROFILE_UPDATED",
+    {
+      profileComplete: isProfileComplete ? 1 : 0,
+    }
+  );
+
+
+  return this.getProfile(userId);
+}
+
 
 
 }

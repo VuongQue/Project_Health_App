@@ -5,7 +5,7 @@ import { UserChallenge } from './entities/user-challenge.entity';
 import { ChallengeSource } from './challenge.types';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/entities/notification.entity';
-import { AchievementListener } from '../achievement/achievement.listener';
+import { AchievementEngine } from '../achievement/achievement.engine';
 import { UsersService } from '../users/users.service';
 
 function toDateKey(d = new Date()) {
@@ -22,7 +22,7 @@ export class ChallengeEngineService {
     @InjectRepository(UserChallenge)
     private ucRepo: Repository<UserChallenge>,
     private notiService: NotificationService,
-    private achListener: AchievementListener,
+    private achEngine: AchievementEngine,
     private usersService: UsersService,
   ) {}
 
@@ -101,7 +101,12 @@ export class ChallengeEngineService {
         });
         if (completedCount === 1) {
           const user = await this.usersService.getUserById(userId);
-          if (user) await this.achListener.unlockAchievement(user as any, 'FIRST_CHALLENGE');
+          if (user) {
+          await this.achEngine.evaluate(userId, 'CHALLENGE_COMPLETED', {
+          challengeCompletedCount: completedCount,
+        });
+
+        }
         }
       }
 

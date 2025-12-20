@@ -23,6 +23,8 @@ import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
 import { NotificationType } from '../notification/entities/notification.entity';
 
 import { ChallengeEngineService } from '../challenge/challenge-engine.service';
+import { AchievementEngine } from '../achievement/achievement.engine';
+
 
 
 import {
@@ -64,6 +66,7 @@ export class FitnessService {
     @Inject('KAFKA_CLIENT')
     private readonly kafka: ClientKafka, 
     private readonly challengeEngine: ChallengeEngineService,
+    private readonly achievementEngine: AchievementEngine,
   ) {}
 
   // ======================================================
@@ -422,6 +425,48 @@ export class FitnessService {
       startedAt: new Date(Date.now() - dto.seconds * 1000),
     });
     await this.logRepo.save(log);
+
+    // ===============================
+    // 🏆 ACHIEVEMENT: WORKOUT
+    // ===============================
+
+    // 1️⃣ Tổng số workout
+    const workoutCount = await this.getTotalWorkouts(user.id);
+
+    // 2️⃣ Streak hiện tại
+    const streak = await this.getWorkoutStreak(user.id);
+
+    // 3️⃣ EARLY_BIRD (trước 6h sáng)
+    const hour = new Date().getHours();
+    const earlyWorkout = hour < 6 ? 1 : 0;
+
+    // 4️⃣ COMEBACK (nghỉ >= 7 ngày rồi quay lại)
+    const lastLogs = await this.logRepo.find({
+      where: { user: { id: user.id } },
+      order: { startedAt: 'DESC' },
+      skip: 1, // bỏ log vừa tạo
+      take: 1,
+    });
+
+    let comeback = 0;
+    const lastLog = lastLogs[0];
+
+    if (lastLog) {
+      const diffDays =
+        (Date.now() - new Date(lastLog.startedAt).getTime()) /
+        (1000 * 60 * 60 * 24);
+
+      if (diffDays >= 7) comeback = 1;
+    }
+
+    // 5️⃣ Evaluate tất cả achievement liên quan workout
+    await this.achievementEngine.evaluate(user.id, 'WORKOUT_COMPLETED', {
+          workoutCount,
+          streak,
+          earlyWorkout,
+          comeback,
+        });
+
 
     // 3️⃣ 🔥 EMIT KAFKA NOTIFICATION
     this.kafka.emit(

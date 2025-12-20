@@ -1,10 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Achievement } from './entities/achievement.entity';
 import { UserAchievement } from './entities/user-achievement.entity';
 import { UsersService } from '../users/users.service';
-import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class AchievementService {
@@ -26,54 +25,76 @@ export class AchievementService {
     const user = await this.usersService.findByEmail(userEmail);
     if (!user) throw new NotFoundException('User not found');
 
-    const list = await this.userAchRepo.find({
+    const unlocked = await this.userAchRepo.find({
       where: { user: { id: user.id } },
-      relations: ['achievement'],
-      order: { earnedAt: 'DESC' },
+      relations: ["achievement"], 
     });
 
-    return list.map((ua) => ({
-      id: ua.id,
+
+    const all = await this.achRepo.find();
+
+    return all
+      // ❌ Ẩn hoàn toàn secret chưa unlock
+      .filter(
+        (a) =>
+          !(
+            a.hiddenLevel === 3 &&
+            !unlocked.some((u) => u.achievement.id === a.id)
+          ),
+      )
+      .map((a) => {
+        const ua = unlocked.find((u) => u.achievement.id === a.id);
+
+        if (!ua) {
+          return {
+            code: a.code,
+            locked: true,
+            displayName: a.hiddenLevel > 0 ? '???' : a.name,
+            hint: a.hiddenLevel >= 1 ? a.hint : null,
+            points: a.points,
+          };
+        }
+
+        return {
+          code: a.code,
+          unlocked: true,
+          name: a.name,
+          description: a.description,
+          points: a.points,
+          earnedAt: ua.earnedAt,
+        };
+      });
+  }
+
+  async getRecentAchievements(userId: number, limit = 6) {
+    return this.userAchRepo.find({
+      where: { user: { id: userId } },
+      order: { earnedAt: 'DESC' },
+      take: limit,
+    });
+  }
+
+  async countUserBadges(userId: number) {
+    return this.userAchRepo.count({
+      where: { user: { id: userId } },
+    });
+  }
+
+  async getUnlockedBadgesForProfile(userId: number, limit = 6) {
+    const rows = await this.userAchRepo.find({
+      where: { user: { id: userId } },
+      relations: ["achievement"],
+      order: { earnedAt: "DESC" },
+      take: limit,
+    });
+
+    return rows.map((ua) => ({
       code: ua.achievement.code,
       name: ua.achievement.name,
       description: ua.achievement.description,
       points: ua.achievement.points,
       earnedAt: ua.earnedAt,
     }));
-  }
-
-  async unlockAchievement(user: User, code: string) {
-    const ach = await this.achRepo.findOne({ where: { code } });
-    if (!ach) throw new NotFoundException(`Achievement ${code} not found`);
-
-    const existed = await this.userAchRepo.findOne({
-      where: { user: { id: user.id }, achievement: { id: ach.id } },
-    });
-
-    if (existed) return existed;
-
-    const record = this.userAchRepo.create({
-      user,
-      achievement: ach,
-    });
-
-    return this.userAchRepo.save(record);
-  }
-
-  async getRecentAchievements(userId: number, limit = 6) {
-    return this.userAchRepo.find({
-      where: { user: { id: userId } },
-      relations: ['achievement'],
-      order: { earnedAt: 'DESC' },
-      take: limit,
-    });
-  }
-
-
-  async countUserBadges(userId: number) {
-    return this.userAchRepo.count({
-      where: { user: { id: userId } },
-    });
   }
 
 }

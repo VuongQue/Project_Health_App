@@ -17,14 +17,24 @@ export class ProfileService {
   async getMyProfile(userId: number) {
     console.log('🔍 getMyProfile userId =', userId);
 
+    // ===== USER =====
     const user = await this.usersService.getProfile(userId);
-    console.log('✔ user loaded =', user);
 
-    const totalWorkouts = await this.fitnessService.getTotalWorkouts(userId);
-    const currentStreak = await this.fitnessService.getWorkoutStreak(userId);
-    const badges = await this.achievementService.getRecentAchievements(userId, 6);
-    const badgesEarned = await this.achievementService.countUserBadges(userId);
-    const challenges = await this.challengeService.getUserActiveChallenges(userId);
+    // ===== STATS =====
+    const [totalWorkouts, currentStreak, badgesEarned] =
+      await Promise.all([
+        this.fitnessService.getTotalWorkouts(userId),
+        this.fitnessService.getWorkoutStreak(userId),
+        this.achievementService.countUserBadges(userId),
+      ]);
+
+    // ===== BADGES (UNLOCKED ONLY) =====
+    const badges =
+      await this.achievementService.getUnlockedBadgesForProfile(userId, 6);
+
+    // ===== CHALLENGES =====
+    const challenges =
+      await this.challengeService.getUserActiveChallenges(userId);
 
     return {
       user,
@@ -33,7 +43,7 @@ export class ProfileService {
         currentStreak,
         badgesEarned,
       },
-      badges,
+      badges,       // ✅ chỉ badge đã unlock
       challenges,
     };
   }

@@ -17,10 +17,24 @@ export interface UserProfile {
 }
 
 export interface BadgeItem {
-  name: string;
-  date: string;
+  // ===== ACHIEVEMENT (mới) =====
+  code?: string;
+
+  unlocked?: boolean;
+  locked?: boolean;
+
+  name?: string;          // khi unlocked
+  displayName?: string;  // khi locked (???)
+  description?: string;
+  hint?: string;
+  earnedAt?: string;
+  points?: number;
+
+  // ===== PROFILE UI (cũ) =====
+  date?: string;
   iconUrl?: string;
 }
+
 
 export interface ChallengeItem {
   name: string;

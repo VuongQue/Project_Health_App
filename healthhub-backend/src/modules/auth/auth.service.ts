@@ -16,6 +16,8 @@ import { ClientKafka } from '@nestjs/microservices';
 import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
 
 import { NotificationType } from '../notification/entities/notification.entity';
+import { AchievementEngine } from '../achievement/achievement.engine';
+
 
 @Injectable()
 export class AuthService {
@@ -23,6 +25,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
+    private readonly achievementEngine: AchievementEngine, 
 
     // 🔥 Kafka producer
     @Inject('KAFKA_CLIENT')
@@ -75,17 +78,6 @@ export class AuthService {
       throw new BadRequestException('User not found');
     }
 
-    // ---- DEBUG (có thể xoá sau) ----
-    console.log('======================================');
-    console.log('🔐 VERIFY OTP DEBUG LOG');
-    console.log('Email:', dto.email);
-    console.log('OTP client gửi:', dto.otp);
-    console.log('OTP trong DB:', user.otpCode);
-    console.log('OTP Expire At:', user.otpExpiresAt);
-    console.log('Now:', new Date());
-    console.log('======================================');
-    // --------------------------------
-
     if (user.isVerified) {
       return { message: 'Account is already verified.' };
     }
@@ -98,12 +90,20 @@ export class AuthService {
       throw new BadRequestException('OTP expired');
     }
 
-    // ✅ VERIFY OK
     user.isVerified = true;
     user.otpCode = null;
     user.otpExpiresAt = null;
 
     await this.usersService.save(user);
+    await this.achievementEngine.evaluate(user.id, 'USER_REGISTER', {
+      register: 1,
+    });
+
+    await this.achievementEngine.evaluate(user.id, 'USER_LOGIN', {
+      loginCount: 1,
+    });
+
+
 
     // 🔥🔥🔥 EMIT WELCOME NOTIFICATION (KAFKA EVENT)
     // ❗ không await → auth không bị block nếu Kafka lỗi

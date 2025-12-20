@@ -7,6 +7,7 @@ import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailModule } from '../email/email.module';
 import { KafkaModule } from '../kafka/kafka.module';
+import { AchievementModule } from '../achievement/achievement.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { KafkaModule } from '../kafka/kafka.module';
       signOptions: { expiresIn: process.env.JWT_EXPIRATION || '1d' as any},
     }),
     KafkaModule,
+    AchievementModule,
   ],
   providers: [AuthService, JwtStrategy],
   controllers: [AuthController],

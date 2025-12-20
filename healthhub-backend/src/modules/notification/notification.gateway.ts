@@ -55,8 +55,15 @@ export class NotificationGateway {
     this.logger.log(`👤 User ${user.id} joined room ${room}`);
   }
 
-  sendNotificationToUser(userId: number, payload: any) {
-    this.server.to(`user_${userId}`).emit("notification", payload);
-    this.logger.log(`📨 Push → user_${userId}`, payload);
+  sendNotificationToUser(userId: number, noti: any) {
+      this.server.to(`user_${userId}`).emit("notification", {
+      id: noti.id,
+      type: noti.type,
+      message: noti.message,
+      icon: noti.icon,
+      link: noti.link,
+      metadata: noti.metadata,
+      createdAt: noti.createdAt,
+    });
   }
 }

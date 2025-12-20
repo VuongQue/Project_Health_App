@@ -11,6 +11,7 @@ import { UsersModule } from '../users/users.module';
 import { ElasticsearchModule } from '../elasticsearch/elasticsearch.module';
 import { KafkaModule } from '../kafka/kafka.module';
 import { ChallengeModule } from '../challenge/challenge.module';
+import { AchievementModule } from '../achievement/achievement.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ChallengeModule } from '../challenge/challenge.module';
     TypeOrmModule.forFeature([Workout, WorkoutLog, WorkoutPlan, WorkoutSession, WorkoutExercise]),
     KafkaModule,
     ChallengeModule,
+    AchievementModule,
   ],
   controllers: [FitnessController],
   providers: [FitnessService],
