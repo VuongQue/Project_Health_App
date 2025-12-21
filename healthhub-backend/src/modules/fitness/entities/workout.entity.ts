@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { WorkoutExercise } from './workout-exercise.entity';
 
+// workout.entity.ts
 @Entity('workouts')
 export class Workout {
   @PrimaryGeneratedColumn()
@@ -16,10 +17,10 @@ export class Workout {
   title: string;
 
   @Column({ length: 50 })
-  level: string; // Beginner | Intermediate | Advanced
+  level: string;
 
   @Column({ length: 50 })
-  muscleGroup: string; // Chest, Legs, Core...
+  muscleGroup: string;
 
   @Column({ nullable: true })
   videoUrl: string;
@@ -30,6 +31,21 @@ export class Workout {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  // =======================
+  // 🔥 NEW FOR MOOD FEATURE
+  // =======================
+
+  @Column({ length: 20, default: 'FITNESS' })
+  category: 'FITNESS' | 'MOOD';
+
+  @Column({ type: 'simple-array', nullable: true })
+  moodTargets?: number[]; // 1..5
+
+  @Column({ length: 30, nullable: true })
+  focusType?: 'BREATHING' | 'RELAX' | 'MINDFULNESS' | 'CARDIO' | 'STRENGTH';
+
+  // =======================
+
   @OneToMany(() => WorkoutExercise, (ex) => ex.workout, {
     cascade: true,
   })
@@ -38,3 +54,4 @@ export class Workout {
   @CreateDateColumn()
   createdAt: Date;
 }
+

@@ -13,7 +13,7 @@ export default {
   // =====================
   // WORKOUT CRUD
   // =====================
-    getWorkouts: (_params?: {
+  getWorkouts: (_params?: {
     search?: string;
     muscleGroup?: string;
     level?: string;
@@ -26,13 +26,16 @@ export default {
     if (_params?.level) params.level = _params.level;
     if (_params?.minKcal != null) params.minKcal = _params.minKcal;
 
-    console.log("📤 FINAL SENT PARAMS =", params);
-
     return axiosClient.get("/fitness/workouts", { params });
   },
 
-
-
+  // =====================
+  // 🔥 NEW: MOOD WORKOUT
+  // =====================
+  getMoodWorkouts: (moodScore?: number) =>
+    axiosClient.get("/fitness/mood/workouts", {
+      params: moodScore ? { score: moodScore } : {},
+    }),
 
   getWorkoutById: (id: number | string) =>
     axiosClient.get(`/fitness/workouts/${id}`),
@@ -53,10 +56,10 @@ export default {
   quickStart: () => axiosClient.post("/fitness/quick-start"),
 
   // =====================
-  // WORKOUT SESSION (nếu bạn bật phần này)
+  // WORKOUT SESSION
   // =====================
   startSession: (workoutId: number) =>
-  axiosClient.post(`/fitness/session/start/${workoutId}`),
+    axiosClient.post(`/fitness/session/start/${workoutId}`),
 
   getActiveSession: (workoutId: number) =>
     axiosClient.get(`/fitness/session/${workoutId}`),
@@ -64,9 +67,10 @@ export default {
   updateSessionIndex: (sessionId: number, index: number) =>
     axiosClient.post(`/fitness/session/update/${sessionId}`, { index }),
 
-  completeSession: (sessionId: number, body: { seconds: number; calories: number }) =>
-    axiosClient.post(`/fitness/session/complete/${sessionId}`, body),
-
+  completeSession: (
+    sessionId: number,
+    body: { seconds: number; calories: number }
+  ) => axiosClient.post(`/fitness/session/complete/${sessionId}`, body),
 
   getSessionDetail: (sessionId: number) =>
     axiosClient.get(`/fitness/session/detail/${sessionId}`),

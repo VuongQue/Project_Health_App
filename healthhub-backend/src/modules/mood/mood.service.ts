@@ -11,7 +11,7 @@ import { TOPIC_NOTIFICATION_EVENTS } from '../../config/kafka.config';
 import { ChallengeEngineService } from '../challenge/challenge-engine.service';
 import { AchievementEngine } from '../achievement/achievement.engine';
 
-
+import { FitnessService } from '../fitness/fitness.service';
 
 
 @Injectable()
@@ -23,6 +23,7 @@ export class MoodService {
     private readonly kafka: ClientKafka,
     private readonly challengeEngine: ChallengeEngineService,
     private readonly achievementEngine: AchievementEngine,
+    private readonly fitnessService: FitnessService,
   ) {}
 
   // Chuẩn hoá date về 00:00:00 để so sánh theo ngày
@@ -382,6 +383,17 @@ export class MoodService {
       },
       weekTrend,
       recent,
+    };
+  }
+  async getWorkoutSuggestions(userId: string) {
+    const today = await this.getToday(userId);
+    const score = today.mood?.score ?? 3;
+
+    const workouts = await this.fitnessService.getMoodWorkouts(score);
+
+    return {
+      mood: today.mood,
+      suggestions: workouts.slice(0, 3),
     };
   }
 }

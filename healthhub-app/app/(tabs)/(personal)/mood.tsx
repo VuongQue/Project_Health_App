@@ -5,28 +5,33 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Dimensions,
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { Calendar, TrendingUp } from "lucide-react-native";
-import { LineChart } from "react-native-chart-kit";
+import { Calendar } from "lucide-react-native";
+import { useRouter } from "expo-router";
+
 import moodApi from "@/src/api/moodApi";
+import fitnessApi from "@/src/api/fitnessApi";
+import { getRandomMoodMessage } from "@/src/utils/moodMessages";
 
 export default function MoodTrackerScreen() {
-  const [selectedValue, setSelectedValue] = useState<number>(3); // 1–5
+  const router = useRouter();
+
+  const [selectedValue, setSelectedValue] = useState(3);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [weekData, setWeekData] = useState<number[]>([]);
-  const [weekLabels, setWeekLabels] = useState<string[]>([]);
-
   const [averageMood, setAverageMood] = useState<number | null>(null);
-  const [change, setChange] = useState<number | null>(null);
   const [bestDay, setBestDay] = useState<string | null>(null);
   const [bestDayScore, setBestDayScore] = useState<number | null>(null);
   const [streak, setStreak] = useState<number | null>(null);
-  const [todayDateText, setTodayDateText] = useState<string>("Today");
+  const [todayDateText, setTodayDateText] = useState("Today");
+
+  const [suggestedWorkouts, setSuggestedWorkouts] = useState<any[]>([]);
+  const [loadingWorkout, setLoadingWorkout] = useState(false);
+
+  const [moodMessage, setMoodMessage] = useState("");
 
   const moods = [
     { emoji: "😔", label: "Sad", value: 1, color: "#64748b" },
@@ -43,14 +48,13 @@ export default function MoodTrackerScreen() {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-
       const res = await moodApi.getDashboard();
       const data = res.data;
 
-      console.log("🔎 RAW DATA FE:", JSON.stringify(data, null, 2));
+      const score = data.today?.mood?.score ?? 3;
+      setSelectedValue(score);
 
-      const todayScore = data.today?.mood?.score ?? 3;
-      setSelectedValue(todayScore);
+      setMoodMessage(getRandomMoodMessage(score));
 
       if (data.today?.date) {
         const d = new Date(data.today.date);
@@ -60,44 +64,52 @@ export default function MoodTrackerScreen() {
       }
 
       setAverageMood(data.insights?.averageMood ?? null);
-      setChange(data.insights?.change ?? null);
       setBestDay(data.insights?.bestDay ?? null);
       setBestDayScore(data.insights?.bestDayScore ?? null);
       setStreak(data.insights?.streak ?? null);
 
-      if (data.weekTrend) {
-        setWeekLabels(data.weekTrend.labels ?? []);
-        setWeekData(data.weekTrend.values ?? []);
-      }
-    } catch (err) {
-      console.error(err);
+      await loadMoodWorkouts(score);
+    } catch {
       Alert.alert("Error", "Failed to load mood dashboard");
     } finally {
       setLoading(false);
     }
   };
 
+  const loadMoodWorkouts = async (score: number) => {
+    try {
+      setLoadingWorkout(true);
+      const res = await fitnessApi.getMoodWorkouts(score);
+      setSuggestedWorkouts(res.data.slice(0, 3));
+    } catch {
+      setSuggestedWorkouts([]);
+    } finally {
+      setLoadingWorkout(false);
+    }
+  };
+
+  const handleSelectMood = (value: number) => {
+    setSelectedValue(value);
+  };
+
   const handleSaveMood = async () => {
     try {
       setSaving(true);
-
       const mood = moods.find((m) => m.value === selectedValue)!;
 
-      const payload = {
+      await moodApi.saveMood({
         date: new Date().toISOString(),
         mood: {
           emoji: mood.emoji,
           color: mood.color,
-          score: selectedValue, // score 1..5
+          score: selectedValue,
         },
-      };
+      });
 
-      await moodApi.saveMood(payload);
-      await loadDashboard();
-
-      Alert.alert("Success", "Mood saved!");
-    } catch (err) {
-      console.error(err);
+      setMoodMessage(getRandomMoodMessage(selectedValue, moodMessage));
+      await loadMoodWorkouts(selectedValue);
+      Alert.alert("Saved", "Your mood has been recorded 💙");
+    } catch {
       Alert.alert("Error", "Failed to save mood");
     } finally {
       setSaving(false);
@@ -107,11 +119,8 @@ export default function MoodTrackerScreen() {
   const insights = useMemo(
     () => [
       {
-        label: "Average Mood",
+        label: "Average",
         value: averageMood != null ? `${averageMood.toFixed(1)}/5` : "--",
-        change:
-          change != null ? `${change > 0 ? "+" : ""}${change.toFixed(1)}` : "",
-        positive: change != null ? change >= 0 : true,
       },
       {
         label: "Best Day",
@@ -124,7 +133,7 @@ export default function MoodTrackerScreen() {
         emoji: "🔥",
       },
     ],
-    [averageMood, change, bestDay, bestDayScore, streak]
+    [averageMood, bestDay, bestDayScore, streak]
   );
 
   return (
@@ -132,11 +141,10 @@ export default function MoodTrackerScreen() {
       <Text style={styles.title}>Mood Tracker</Text>
       <Text style={styles.subtitle}>How are you feeling today?</Text>
 
-      {/* Today’s Mood */}
+      {/* TODAY MOOD */}
       <View style={styles.card}>
         <View style={styles.rowBetween}>
           <Text style={styles.sectionTitle}>Today's Mood</Text>
-
           <View style={styles.rowGap}>
             <Calendar size={16} color="#94a3b8" />
             <Text style={styles.textMuted}>{todayDateText}</Text>
@@ -147,7 +155,7 @@ export default function MoodTrackerScreen() {
           {moods.map((m) => (
             <TouchableOpacity
               key={m.value}
-              onPress={() => setSelectedValue(m.value)}
+              onPress={() => handleSelectMood(m.value)}
               style={[
                 styles.moodButton,
                 selectedValue === m.value
@@ -163,8 +171,8 @@ export default function MoodTrackerScreen() {
 
         <TouchableOpacity
           style={[styles.saveBtn, saving && { opacity: 0.7 }]}
-          disabled={saving}
           onPress={handleSaveMood}
+          disabled={saving}
         >
           {saving ? (
             <ActivityIndicator color="#fff" />
@@ -174,107 +182,68 @@ export default function MoodTrackerScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Insights */}
+      {/* MESSAGE */}
+      <View style={styles.messageCard}>
+        <Text style={styles.messageText}>{moodMessage}</Text>
+        <Text style={styles.messageHint}>
+          Những bài tập bên dưới có thể giúp tâm trạng bạn tốt hơn 
+          Hãy thử nhé !!💙
+        </Text>
+      </View>
+
+      {/* INSIGHTS */}
       <View style={styles.rowWrap}>
         {insights.map((ins, i) => (
           <View key={i} style={styles.insightBox}>
             <Text style={styles.textSmall}>{ins.label}</Text>
-
             <View style={styles.rowGap}>
               <Text style={styles.textWhite}>{ins.value}</Text>
               {ins.emoji && <Text>{ins.emoji}</Text>}
             </View>
-
-            {!!ins.change && (
-              <Text
-                style={[
-                  styles.textSmall,
-                  { color: ins.positive ? "#4ade80" : "#f87171" },
-                ]}
-              >
-                {ins.change}
-              </Text>
-            )}
           </View>
         ))}
       </View>
 
-      {/* Weekly Trend */}
+      {/* WORKOUT SUGGESTION */}
       <View style={styles.card}>
-        <View style={styles.rowGap}>
-          <TrendingUp size={18} color="#2563eb" />
-          <Text style={styles.sectionTitle}>Weekly Trend</Text>
-        </View>
+        <Text style={styles.sectionTitle}>Recommended for You</Text>
 
-        {loading ? (
-          <View style={{ padding: 24 }}>
-            <ActivityIndicator color="#2563eb" />
-          </View>
+        {loadingWorkout ? (
+          <ActivityIndicator style={{ marginTop: 12 }} />
+        ) : suggestedWorkouts.length === 0 ? (
+          <Text style={styles.textMuted}>No suitable workout found</Text>
         ) : (
-          <LineChart
-            data={{
-              labels: weekLabels,
-              datasets: [
-                {
-                  data: weekData,
-                  color: () => "#2563eb",
-                  strokeWidth: 3,
-                },
-                {
-                  // invisible dataset forcing Y scale 1 → 5
-                  data: [1, 5],
-                  withDots: false,
-                  color: () => "rgba(0,0,0,0)",
-                  strokeWidth: 0,
-                },
-              ],
-            }}
-            width={Dimensions.get("window").width - 48}
-            height={220}
-            segments={4}
-            yAxisInterval={1}
-            chartConfig={{
-              backgroundGradientFrom: "#1e293b",
-              backgroundGradientTo: "#1e293b",
-              decimalPlaces: 0,
-              color: () => "#2563eb",
-              labelColor: () => "#94a3b8",
-              propsForDots: {
-                r: "4",
-                strokeWidth: "2",
-                stroke: "#2563eb",
-              },
-              propsForBackgroundLines: {
-                strokeDasharray: "",
-                stroke: "#334155",
-              },
-            }}
-            bezier
-            withInnerLines
-            withOuterLines={false}
-            style={{
-              marginVertical: 12,
-              borderRadius: 16,
-            }}
-          />
+          suggestedWorkouts.map((w) => (
+            <TouchableOpacity
+              key={w.id}
+              style={styles.workoutItem}
+              onPress={() =>
+                router.push(`/workout/${w.id}` as any)
+              }
+            >
+              <Text style={styles.workoutTitle}>{w.title}</Text>
+              <Text style={styles.textMuted}>
+                {w.focusType} · {w.level}
+              </Text>
+            </TouchableOpacity>
+          ))
         )}
       </View>
     </ScrollView>
   );
 }
 
-/* ----------------------------------------------------------
-    STYLES
------------------------------------------------------------ */
+
+/* ========================= STYLES ========================= */
+
 const styles = StyleSheet.create({
   container: { backgroundColor: "#0f172a", flex: 1, padding: 16 },
-
   title: { color: "white", fontSize: 24, fontWeight: "bold" },
   subtitle: { color: "#94a3b8", fontSize: 13, marginBottom: 16 },
 
   card: {
     backgroundColor: "#1e293b",
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: "#334155",
@@ -287,20 +256,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-
   rowGap: { flexDirection: "row", alignItems: "center", gap: 6 },
 
   textMuted: { color: "#94a3b8", fontSize: 12 },
-
   sectionTitle: { color: "white", fontSize: 16, fontWeight: "600" },
 
   moodButton: {
     flex: 1,
     alignItems: "center",
     padding: 8,
-    borderRadius: 16,
+    borderRadius: 14,
   },
-
   moodActive: { backgroundColor: "rgba(37,99,235,0.3)" },
   moodInactive: { backgroundColor: "rgba(51,65,85,0.6)" },
 
@@ -313,25 +279,51 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 16,
   },
-
   saveBtnText: { textAlign: "center", color: "white", fontWeight: "600" },
 
   rowWrap: {
     flexDirection: "row",
     justifyContent: "space-between",
-    flexWrap: "wrap",
     marginBottom: 16,
   },
-
   insightBox: {
     width: "31%",
     backgroundColor: "#1e293b",
-    borderRadius: 16,
+    borderRadius: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: "#334155",
-    padding: 10,
   },
 
   textSmall: { color: "#94a3b8", fontSize: 12 },
   textWhite: { color: "white", fontWeight: "500" },
+
+  workoutItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: "#334155",
+  },
+  workoutTitle: { color: "white", fontWeight: "600" },
+
+  messageCard: {
+    backgroundColor: "#1e293b",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#334155",
+    marginBottom: 16,
+  },
+
+  messageText: {
+    color: "#e5e7eb",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+
+  messageHint: {
+    color: "#93c5fd",
+    fontSize: 12,
+  },
+
 });

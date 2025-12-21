@@ -142,5 +142,10 @@ export class FitnessController {
     return this.fitnessService.reindexAllWorkouts();
   }
 
+  @Get('mood/workouts')
+  getMoodWorkouts(@Query('score') score?: number) {
+    return this.fitnessService.getMoodWorkouts(score ? Number(score) : undefined);
+  }
+
 
 }

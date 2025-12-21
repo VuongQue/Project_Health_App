@@ -48,4 +48,10 @@ export class MoodController {
   getDashboard(@Req() req) {
     return this.moodService.getDashboard(req.user.userId);
   }
+
+  @Get('workout-suggestions')
+  getSuggestions(@Req() req) {
+    return this.moodService.getWorkoutSuggestions(req.user.userId);
+  }
+
 }

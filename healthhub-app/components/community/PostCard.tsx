@@ -24,25 +24,28 @@ export function PostCard({ post, refresh }: Props) {
   const handleLike = async () => {
     if (liking) return;
     setLiking(true);
-
     try {
       await communityApi.toggleLike(post._id);
       refresh();
-    } catch (err) {
-      console.log("Like error:", err);
     } finally {
       setLiking(false);
     }
   };
 
+  const avatarUrl =
+    post.userId?.avatar ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      post.userId?.name ?? "User"
+    )}`;
+
   return (
     <View style={styles.card}>
       {/* HEADER */}
       <View style={styles.header}>
-        <Text style={styles.avatar}>{post.userId.avatar}</Text>
+        <Image source={{ uri: avatarUrl }} style={styles.avatar} />
 
         <View>
-          <Text style={styles.author}>{post.userId.name}</Text>
+          <Text style={styles.author}>{post.userId?.name}</Text>
           <Text style={styles.time}>
             {new Date(post.createdAt).toDateString()}
           </Text>
@@ -50,22 +53,13 @@ export function PostCard({ post, refresh }: Props) {
       </View>
 
       {/* CONTENT */}
-      <Text style={styles.content}>{post.content}</Text>
+      {post.content && <Text style={styles.content}>{post.content}</Text>}
 
-      {/* MULTI IMAGE SUPPORT */}
-      {post.media && post.media.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: 16 }}
-        >
+      {/* MEDIA */}
+      {post.media?.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {post.media.map((url, idx) => (
-            <Image
-              key={idx}
-              source={{ uri: url }}
-              style={styles.mediaImage}
-              resizeMode="cover"
-            />
+            <Image key={idx} source={{ uri: url }} style={styles.mediaImage} />
           ))}
         </ScrollView>
       )}
@@ -85,21 +79,10 @@ export function PostCard({ post, refresh }: Props) {
           <Text style={styles.actionText}>{post.commentCount}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity>
-          <Share2 size={18} color="#94a3b8" />
-        </TouchableOpacity>
+        <Share2 size={18} color="#94a3b8" />
       </View>
 
-      {/* COMMENT PREVIEW (only if comments collapsed) */}
-      {!showComments &&
-        post.commentPreview?.map((c) => (
-          <Text key={c.id} style={styles.commentPreview}>
-            <Text style={{ color: "white" }}>{c.user.name}: </Text>
-            {c.text}
-          </Text>
-        ))}
-
-      {/* FULL COMMENT SECTION */}
+      {/* COMMENTS */}
       {showComments && <PostComments postId={post._id} />}
     </View>
   );
@@ -108,20 +91,23 @@ export function PostCard({ post, refresh }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#1e293b",
-    padding: 20,
+    padding: 16,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#334155",
+    marginHorizontal: 16,
     marginBottom: 16,
   },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 12,
   },
   avatar: {
-    fontSize: 32,
+    width: 44,
+    height: 44,
+    borderRadius: 999,
     marginRight: 12,
+    backgroundColor: "#0f172a",
   },
   author: {
     color: "white",
@@ -134,7 +120,7 @@ const styles = StyleSheet.create({
   },
   content: {
     color: "white",
-    marginBottom: 16,
+    marginBottom: 12,
     lineHeight: 20,
   },
   mediaImage: {
@@ -145,8 +131,8 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
+    gap: 24,
+    marginVertical: 8,
   },
   actionBtn: {
     flexDirection: "row",
@@ -155,11 +141,5 @@ const styles = StyleSheet.create({
   },
   actionText: {
     color: "#94a3b8",
-    fontSize: 14,
-  },
-  commentPreview: {
-    color: "#94a3b8",
-    marginTop: 4,
-    fontSize: 14,
   },
 });

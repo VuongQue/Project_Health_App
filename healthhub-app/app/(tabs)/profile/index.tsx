@@ -117,22 +117,6 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* ===== CHALLENGES ===== */}
-        <Text style={styles.sectionTitle}>Active Challenges</Text>
-        {challenges?.map((ch, i) => (
-          <View key={i} style={styles.challengeCard}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.textWhite}>{ch.name}</Text>
-              <Text style={styles.textMuted}>
-                {ch.daysCompleted}/{ch.totalDays}
-              </Text>
-            </View>
-
-            <View style={styles.progressBg}>
-              <View style={[styles.progressFill, { width: `${ch.progress}%` }]} />
-            </View>
-          </View>
-        ))}
 
         {/* ===== BADGES (UNLOCKED ONLY) ===== */}
         <View style={styles.badgeHeader}>

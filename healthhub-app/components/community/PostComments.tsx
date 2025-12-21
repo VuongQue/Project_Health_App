@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+} from "react-native";
 import { communityApi } from "@/src/api/communityApi";
 
 export function PostComments({ postId }: { postId: string }) {
@@ -7,95 +14,51 @@ export function PostComments({ postId }: { postId: string }) {
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<any>(null);
 
-  // Build tree comment chuẩn
-  const buildTree = (items: any[]) => {
-    const map: Record<string, any> = {};
-    const roots: any[] = [];
-
-    items.forEach((c) => {
-      const id = c._id.toString();
-      map[id] = { ...c, children: [] };
-    });
-
-    items.forEach((c) => {
-      const id = c._id.toString();
-      const parentId = c.parentId?.toString();
-
-      if (parentId && map[parentId]) {
-        map[parentId].children.push(map[id]);
-      } else {
-        roots.push(map[id]);
-      }
-    });
-
-    return roots;
-  };
-
   const load = async () => {
     const res = await communityApi.getComments(postId);
-    const tree = buildTree(res);
-    setComments(tree);
+    setComments(res);
   };
 
   const sendComment = async () => {
     if (!text.trim()) return;
-
-    const content = text.trim();
+    await communityApi.addComment(postId, text, replyTo?._id);
     setText("");
-
-    try {
-      await communityApi.addComment(postId, content, replyTo?._id);
-      setReplyTo(null);
-      await load();
-    } catch (err) {
-      console.log("Comment error:", err);
-    }
+    setReplyTo(null);
+    load();
   };
 
   useEffect(() => {
     load();
   }, []);
 
-  const formatTime = (date: string) => {
-    const d = new Date(date);
-    const diff = (Date.now() - d.getTime()) / 1000;
-
-    if (diff < 60) return `${Math.floor(diff)}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-  };
-
-  const renderComment = (c: any, level = 0) => (
-    <View key={c._id} style={{ paddingLeft: level * 20, marginBottom: 10 }}>
-      <Text style={styles.name}>{c.user.name}</Text>
-      <Text style={styles.comment}>{c.text}</Text>
-
-      <View style={styles.metaRow}>
-        <Text style={styles.time}>{formatTime(c.createdAt)}</Text>
-
-        <TouchableOpacity onPress={() => setReplyTo(c)}>
-          <Text style={styles.reply}>Reply</Text>
-        </TouchableOpacity>
-      </View>
-
-      {c.children.map((child: any) => renderComment(child, level + 1))}
-    </View>
-  );
-
   return (
     <View style={{ marginTop: 12 }}>
-      {replyTo && (
-        <Text style={styles.replying}>
-          Replying to <Text style={{ color: "#3b82f6" }}>{replyTo.user.name}</Text>
-        </Text>
-      )}
+      {comments.map((c) => {
+        const avatar =
+          c.user.avatar ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            c.user.name
+          )}`;
 
-      <View style={styles.row}>
+        return (
+          <View key={c._id} style={styles.comment}>
+            <Image source={{ uri: avatar }} style={styles.avatar} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{c.user.name}</Text>
+              <Text style={styles.text}>{c.text}</Text>
+              <TouchableOpacity onPress={() => setReplyTo(c)}>
+                <Text style={styles.reply}>Reply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      })}
+
+      <View style={styles.inputRow}>
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder={replyTo ? "Write a reply..." : "Write a comment..."}
+          placeholder="Write a comment..."
           placeholderTextColor="#64748b"
           style={styles.input}
         />
@@ -103,54 +66,48 @@ export function PostComments({ postId }: { postId: string }) {
           <Text style={styles.send}>Send</Text>
         </TouchableOpacity>
       </View>
-
-      {comments.map((c) => renderComment(c))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  comment: {
     flexDirection: "row",
-    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    backgroundColor: "#0f172a",
+  },
+  name: {
+    color: "white",
+    fontWeight: "600",
+  },
+  text: {
+    color: "#cbd5e1",
+  },
+  reply: {
+    color: "#3b82f6",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  inputRow: {
+    flexDirection: "row",
     gap: 8,
-    marginBottom: 10,
+    marginTop: 8,
   },
   input: {
     flex: 1,
     backgroundColor: "#0f172a",
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
     color: "white",
   },
   send: {
     color: "#3b82f6",
     fontWeight: "bold",
-  },
-  comment: {
-    color: "#cbd5e1",
-  },
-  name: {
-    color: "white",
-    fontWeight: "600",
-  },
-  metaRow: {
-    flexDirection: "row",
-    gap: 16,
-    marginTop: 4,
-  },
-  time: {
-    color: "#64748b",
-    fontSize: 12,
-  },
-  reply: {
-    color: "#3b82f6",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  replying: {
-    color: "#eab308",
-    marginBottom: 6,
   },
 });

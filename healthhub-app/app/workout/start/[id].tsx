@@ -8,7 +8,7 @@ import {
 } from "react-native";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, Share2, CheckCircle2, Flame } from "lucide-react-native";
+import { ArrowLeft, Share2, CheckCircle2 } from "lucide-react-native";
 
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Defs, LinearGradient as LG, Stop } from "react-native-svg";
@@ -24,46 +24,37 @@ export default function WorkoutTrainingScreen() {
   const [workout, setWorkout] = useState<any>(null);
   const [exerciseIndex, setExerciseIndex] = useState(0);
 
-  // Timer
-  const [seconds, setSeconds] = useState(0);
+  // =============================
+  // ⏱ TIME STATES
+  // =============================
+  const [exerciseSeconds, setExerciseSeconds] = useState(0); // exercise hiện tại
+  const [totalSeconds, setTotalSeconds] = useState(0); // tổng workout
+
+  // ✅ Lưu thời gian theo từng exercise
+  const [exerciseTimes, setExerciseTimes] = useState<Record<number, number>>({});
+
   const timerRef = useRef<any>(null);
 
-  // Auto-hide controls
-  const [showControls, setShowControls] = useState(false);
-
-  const calories = Math.round(
-    (workout?.kcalPerMin ?? 5) * (seconds / 60)
-  );
-
-  // Video player
+  // =============================
+  // VIDEO
+  // =============================
   const player = useVideoPlayer(null, (p) => {
     p.loop = false;
   });
 
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showControls, setShowControls] = useState(false);
 
-  // Listen playing state
-  useEffect(() => {
-    const sub = player.addListener("playingChange", (event) => {
-      const playing = event.isPlaying;
-      setIsPlaying(playing);
-
-      if (playing) startTimer();
-      else stopTimer();
-    });
-
-    return () => sub.remove();
-  }, []);
-
-  // START TIMER
+  // =============================
+  // TIMER CONTROL (KHÔNG PHỤ THUỘC VIDEO)
+  // =============================
   const startTimer = () => {
     if (timerRef.current) return;
     timerRef.current = setInterval(() => {
-      setSeconds((s) => s + 1);
+      setExerciseSeconds((s) => s + 1);
     }, 1000);
   };
 
-  // STOP TIMER
   const stopTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -71,7 +62,31 @@ export default function WorkoutTrainingScreen() {
     }
   };
 
-  // Cleanup timer + video
+  // ✅ Timer chạy theo exercise (khi đã load xong workout/session)
+  useEffect(() => {
+    if (!session || !workout) return;
+
+    // mỗi lần đổi exercise → reset timer của exercise mới (nếu đã có time thì hiển thị lại)
+    setExerciseSeconds(exerciseTimes[exerciseIndex] ?? 0);
+
+    // auto start timer cho exercise hiện tại
+    startTimer();
+
+    return () => {
+      stopTimer();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseIndex, session, workout]);
+
+  // chỉ để sync trạng thái play/pause UI cho video
+  useEffect(() => {
+    const sub = player.addListener("playingChange", (event) => {
+      setIsPlaying(event.isPlaying);
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Cleanup
   useEffect(() => {
     return () => {
       stopTimer();
@@ -82,18 +97,19 @@ export default function WorkoutTrainingScreen() {
     };
   }, []);
 
+  // =============================
   // LOAD SESSION + WORKOUT
+  // =============================
   const loadSessionData = async () => {
     try {
       const wid = Number(id);
 
       const sessionRes = await fitnessApi.startSession(wid);
       setSession(sessionRes.data);
+      setExerciseIndex(sessionRes.data.currentExerciseIndex);
 
       const detail = await fitnessApi.getWorkoutById(wid);
       setWorkout(detail.data);
-
-      setExerciseIndex(sessionRes.data.currentExerciseIndex);
 
       if (detail.data.videoUrl) {
         player.replace(detail.data.videoUrl);
@@ -107,29 +123,56 @@ export default function WorkoutTrainingScreen() {
     loadSessionData();
   }, []);
 
-  if (!session || !workout)
+  if (!session || !workout) {
     return (
       <View style={styles.center}>
         <Text style={{ color: "white" }}>Loading...</Text>
       </View>
     );
+  }
 
   const exercises = workout.exercises;
   const completed = exercises.filter((_: any, i: number) => i < exerciseIndex).length;
   const progress = Math.floor((exerciseIndex / exercises.length) * 100);
 
-  // UPDATE index
-  const updateIndex = async (i: number) => {
-    setExerciseIndex(i);
-    await fitnessApi.updateSessionIndex(session.id, i);
+  // =============================
+  // CHANGE EXERCISE
+  // =============================
+  const updateIndex = async (nextIndex: number) => {
+    // ✅ chốt thời gian exercise hiện tại (trước khi reset)
+    const currentSeconds = exerciseSeconds;
+
+    setExerciseTimes((prev) => ({
+      ...prev,
+      [exerciseIndex]: currentSeconds,
+    }));
+
+    setTotalSeconds((prev) => prev + currentSeconds);
+
+    // reset exercise mới sẽ được set trong useEffect([exerciseIndex])
+    setExerciseIndex(nextIndex);
+    await fitnessApi.updateSessionIndex(session.id, nextIndex);
   };
 
+  // =============================
+  // CTA
+  // =============================
   const onPressCTA = async () => {
     if (exerciseIndex < exercises.length - 1) {
-      const next = exerciseIndex + 1;
-      await updateIndex(next);
+      await updateIndex(exerciseIndex + 1);
       return;
     }
+
+    // exercise cuối → chốt nốt
+    const currentSeconds = exerciseSeconds;
+    const finalExerciseTimes = {
+      ...exerciseTimes,
+      [exerciseIndex]: currentSeconds,
+    };
+
+    const finalSeconds = totalSeconds + currentSeconds;
+
+    stopTimer();
 
     try {
       player.pause();
@@ -137,25 +180,16 @@ export default function WorkoutTrainingScreen() {
     } catch {}
 
     await fitnessApi.completeSession(session.id, {
-      seconds,
-      calories,
+      seconds: finalSeconds,
+      calories: Math.round((workout.kcalPerMin ?? 5) * (finalSeconds / 60)),
     });
 
     router.push("(tabs)/fitness" as any);
   };
 
-  // Tap video → show controls for 2s
-  const handleTapVideo = () => {
-    if (!isPlaying) return; // play state sẽ tự hiển thị play button
-
-    setShowControls(true);
-    setTimeout(() => setShowControls(false), 2000);
-  };
-
-  // Format time
-  const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
-  const ss = String(seconds % 60).padStart(2, "0");
-
+  // =============================
+  // UI
+  // =============================
   return (
     <View style={styles.container}>
       {/* HEADER */}
@@ -175,22 +209,38 @@ export default function WorkoutTrainingScreen() {
       <View style={styles.videoWrapper}>
         <VideoView player={player} style={styles.video} nativeControls={false} />
 
-        {/* TAP AREA */}
         <TouchableOpacity
           activeOpacity={1}
           style={styles.videoOverlay}
-          onPress={handleTapVideo}
+          onPress={() => {
+            if (!isPlaying) return;
+            setShowControls(true);
+            setTimeout(() => setShowControls(false), 2000);
+          }}
         >
-          {/* PLAY BUTTON */}
           {!isPlaying && (
-            <TouchableOpacity onPress={() => player.play()} style={styles.playButton}>
+            <TouchableOpacity
+              onPress={() => {
+                // video play (timer đã chạy độc lập rồi)
+                try {
+                  player.play();
+                } catch {}
+              }}
+              style={styles.playButton}
+            >
               <Text style={{ color: "white", fontSize: 34 }}>▶</Text>
             </TouchableOpacity>
           )}
 
-          {/* PAUSE BUTTON (auto-hide) */}
           {isPlaying && showControls && (
-            <TouchableOpacity onPress={() => player.pause()} style={styles.playButton}>
+            <TouchableOpacity
+              onPress={() => {
+                try {
+                  player.pause();
+                } catch {}
+              }}
+              style={styles.playButton}
+            >
               <Text style={{ color: "white", fontSize: 34 }}>⏸</Text>
             </TouchableOpacity>
           )}
@@ -202,15 +252,6 @@ export default function WorkoutTrainingScreen() {
             colors={["#3B82F6", "#8B5CF6"]}
             style={[styles.videoProgressFill, { width: `${progress}%` }]}
           />
-        </View>
-      </View>
-
-      {/* TIMER + CALORIES */}
-      <View style={styles.timerBox}>
-        <Text style={styles.timerText}>{mm}:{ss}</Text>
-        <View style={styles.calorieRow}>
-          <Flame size={20} color="#fb923c" />
-          <Text style={styles.calorieText}>{calories} kcal burned</Text>
         </View>
       </View>
 
@@ -240,7 +281,6 @@ export default function WorkoutTrainingScreen() {
               </Defs>
 
               <Circle cx="40" cy="40" r={36} stroke="#1e293b" strokeWidth="6" fill="none" />
-
               <Circle
                 cx="40"
                 cy="40"
@@ -254,9 +294,7 @@ export default function WorkoutTrainingScreen() {
               />
             </Svg>
 
-            <View style={styles.circleTextWrapper}>
-              <Text style={styles.circleText}>{progress}%</Text>
-            </View>
+            <Text style={styles.circleText}>{progress}%</Text>
           </View>
         </View>
 
@@ -273,10 +311,16 @@ export default function WorkoutTrainingScreen() {
             const isActive = i === exerciseIndex;
             const isDone = i < exerciseIndex;
 
+            // ✅ lấy timer đúng cho từng item
+            const displaySeconds = isActive
+              ? exerciseSeconds
+              : exerciseTimes[i] != null
+              ? exerciseTimes[i]
+              : null;
+
             return (
-              <TouchableOpacity
+              <View
                 key={i}
-                onPress={() => updateIndex(i)}
                 style={[
                   styles.exerciseItem,
                   isActive && styles.exerciseActive,
@@ -292,14 +336,19 @@ export default function WorkoutTrainingScreen() {
                     {ex.name}
                   </Text>
 
+                  {/* ✅ TIMER HIỆN TRÊN TỪNG EXERCISE */}
                   <Text style={styles.exerciseDetail}>
-                    {ex.durationSec ? `${ex.durationSec}s` : `${ex.reps} reps`}
+                    {displaySeconds != null
+                      ? `⏱ ${displaySeconds}s`
+                      : ex.durationSec
+                      ? `${ex.durationSec}s`
+                      : `${ex.reps} reps`}
                   </Text>
                 </View>
 
                 {isDone && <CheckCircle2 size={22} color="#4ade80" />}
                 {isActive && !isDone && <View style={styles.activeDot} />}
-              </TouchableOpacity>
+              </View>
             );
           })}
         </View>
@@ -319,7 +368,7 @@ export default function WorkoutTrainingScreen() {
   );
 }
 
-// =============== STYLES ===============
+// ================= STYLES =================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0f172a" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -365,16 +414,6 @@ const styles = StyleSheet.create({
   },
   videoProgressFill: { height: "100%" },
 
-  timerBox: {
-    paddingTop: 12,
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#0f172a",
-  },
-  timerText: { color: "white", fontSize: 34, fontWeight: "700" },
-  calorieRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  calorieText: { color: "#fb923c", fontSize: 18 },
-
   infoBox: { flexDirection: "row", padding: 20, gap: 20 },
   title: { color: "white", fontSize: 22, fontWeight: "700" },
   sub: { color: "#94a3b8", marginTop: 4 },
@@ -403,8 +442,7 @@ const styles = StyleSheet.create({
   },
 
   circleBox: { width: 80, height: 80, justifyContent: "center", alignItems: "center" },
-  circleTextWrapper: { position: "absolute" },
-  circleText: { color: "white", fontSize: 16 },
+  circleText: { position: "absolute", color: "white", fontSize: 16 },
 
   exerciseHeader: {
     marginTop: 10,
@@ -428,9 +466,6 @@ const styles = StyleSheet.create({
   exerciseActive: {
     backgroundColor: "rgba(59,130,246,0.2)",
     borderColor: "#3b82f6",
-    shadowColor: "#3b82f6",
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
   },
   exerciseDone: { opacity: 0.5 },
 
@@ -446,7 +481,6 @@ const styles = StyleSheet.create({
 
   exerciseName: { color: "white", fontSize: 16 },
   exerciseNameDone: { textDecorationLine: "line-through", color: "#94a3b8" },
-
   exerciseDetail: { color: "#94a3b8", fontSize: 14 },
 
   activeDot: {

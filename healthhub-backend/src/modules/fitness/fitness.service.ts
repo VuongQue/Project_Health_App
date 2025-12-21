@@ -73,22 +73,42 @@ export class FitnessService {
   // WORKOUT LIST + FILTER (ELASTICSEARCH + fallback DB)
   // ======================================================
   async findAllWorkouts(filter?: WorkoutFilterDto) {
-    const ids = await this.workoutSearch.searchWorkouts(filter || {});
+    const where: any = {};
 
-    // 🔥 FALLBACK: nếu ES chưa có data → lấy từ DB
-    if (!ids.length) {
-      return this.workoutRepo.find({
-        relations: ['exercises'],
-        order: { createdAt: 'DESC' },
-      });
+    if (filter?.category) {
+      where.category = filter.category;
+    }
+
+    if (filter?.level) {
+      where.level = filter.level;
+    }
+
+    if (filter?.muscleGroup) {
+      where.muscleGroup = filter.muscleGroup;
+    }
+
+    if (filter?.focusType) {
+      where.focusType = filter.focusType;
+    }
+
+    if (filter?.moodScore) {
+      where.moodTargets = In([Number(filter.moodScore)]);
+    }
+
+    if (filter?.minKcal || filter?.maxKcal) {
+      where.kcalPerMin = Between(
+        filter.minKcal ? Number(filter.minKcal) : 0,
+        filter.maxKcal ? Number(filter.maxKcal) : 999,
+      );
     }
 
     return this.workoutRepo.find({
-      where: { id: In(ids) },
+      where,
       relations: ['exercises'],
       order: { createdAt: 'DESC' },
     });
   }
+
 
 
 
@@ -545,4 +565,20 @@ export class FitnessService {
 
     return streak;
   }
+
+  async getMoodWorkouts(moodScore?: number) {
+    const where: any = {
+      category: 'MOOD',
+    };
+
+    if (moodScore) {
+      where.moodTargets = In([moodScore]);
+    }
+
+    return this.workoutRepo.find({
+      where,
+      order: { kcalPerMin: 'ASC' },
+    });
+  }
+
 }

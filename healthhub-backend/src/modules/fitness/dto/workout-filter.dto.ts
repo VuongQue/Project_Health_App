@@ -1,6 +1,9 @@
-import { IsOptional, IsString, IsNumberString } from "class-validator";
+import { IsOptional, IsString, IsNumberString, IsIn } from 'class-validator';
 
 export class WorkoutFilterDto {
+  // =====================
+  // EXISTING (GIỮ NGUYÊN)
+  // =====================
   @IsOptional()
   @IsString()
   search?: string;
@@ -15,9 +18,30 @@ export class WorkoutFilterDto {
 
   @IsOptional()
   @IsNumberString()
-  minKcal?: number;
+  minKcal?: string;
 
   @IsOptional()
   @IsNumberString()
-  maxKcal?: number;
+  maxKcal?: string;
+
+  // =====================
+  // NEW FOR MOOD FEATURE
+  // =====================
+  @IsOptional()
+  @IsIn(['FITNESS', 'MOOD'])
+  category?: 'FITNESS' | 'MOOD';
+
+  @IsOptional()
+  @IsNumberString()
+  moodScore?: string; // 1..5
+
+  @IsOptional()
+  @IsIn([
+    'BREATHING',
+    'RELAX',
+    'MINDFULNESS',
+    'CARDIO',
+    'STRENGTH',
+  ])
+  focusType?: string;
 }

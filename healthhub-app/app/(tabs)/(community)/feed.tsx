@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,29 +10,37 @@ import {
 
 import { Plus, MessageCircle, Search } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
+import { useFocusEffect, router } from "expo-router";
 
 import { StoryCircle } from "@/components/community/StoryCircle";
 import { PostComposer } from "@/components/community/PostComposer";
 import { PostCard } from "@/components/community/PostCard";
 
 import { communityApi } from "@/src/api/communityApi";
+import { profileApi } from "@/src/api/profileApi";
 import { StoryItem, PostItem } from "@/src/types/community";
-import { router } from "expo-router";
 
 export default function CommunityFeed() {
   const [stories, setStories] = useState<StoryItem[]>([]);
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadingStory, setUploadingStory] = useState(false);
+  const [myAvatar, setMyAvatar] = useState<string | null>(null);
 
-  /** LOAD POSTS */
+  /** LOAD PROFILE */
+  const loadMyProfile = async () => {
+    const res = await profileApi.getMe();
+    setMyAvatar(res.data.user.avatarUrl ?? null);
+  };
+
+  /** LOAD FEED */
   const loadFeed = async () => {
     try {
       setLoading(true);
       const res = await communityApi.getFeed();
       setPosts(res.posts);
-    } catch (error) {
-      console.error("Feed load error:", error);
+    } catch (e) {
+      console.log("Feed load error", e);
     } finally {
       setLoading(false);
     }
@@ -40,52 +48,27 @@ export default function CommunityFeed() {
 
   /** LOAD STORIES */
   const loadStories = async () => {
-  try {
     const res = await communityApi.getStories();
 
-    // Nếu không có story nào trong DB → vẫn hiển thị "Your Story"
-    if (!res || res.length === 0) {
-      setStories([
-        {
-          id: "your-story",
-          user: {
-            name: "Your Story",
-            avatar: "👤", // hoặc icon
-          },
-          hasStory: false,
-          isYourStory: true,
-          media: null,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      return;
-    }
-
-    // Nếu có story thì thêm Your Story vào đầu danh sách
-    setStories([
-      {
-        id: "your-story",
-        user: {
-          name: "Your Story",
-          avatar: "👤",
-        },
-        hasStory: false,
-        isYourStory: true,
-        media: null,
-        createdAt: new Date().toISOString(),
+    const yourStory: StoryItem = {
+      id: "your-story",
+      user: {
+        name: "Your Story",
+        avatar: myAvatar,
       },
-      ...res,
-    ]);
-  } catch (error) {
-    console.error("Story load error:", error);
-  }
-};
-  
+      hasStory: false,
+      isYourStory: true,
+      media: null,
+      createdAt: new Date().toISOString(),
+    };
+
+    setStories([yourStory, ...(res || [])]);
+  };
 
   /** UPLOAD STORY */
   const handleCreateStory = async () => {
     try {
-      setUploadingStory(true); // bật loading
+      setUploadingStory(true);
 
       const pick = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -95,19 +78,26 @@ export default function CommunityFeed() {
       if (pick.canceled) return;
 
       await communityApi.uploadStory(pick.assets[0].uri);
-
-      loadStories();
-    } catch (err) {
-      console.log("Upload story error:", err);
+      await loadStories();
     } finally {
-      setUploadingStory(false); // tắt loading
+      setUploadingStory(false);
     }
   };
 
   useEffect(() => {
-    loadFeed();
-    loadStories();
+    loadMyProfile();
   }, []);
+
+  useEffect(() => {
+    if (myAvatar) loadStories();
+  }, [myAvatar]);
+
+  /** 🔥 QUAN TRỌNG: reload feed khi quay lại từ CreatePost */
+  useFocusEffect(
+    useCallback(() => {
+      loadFeed();
+    }, [])
+  );
 
   return (
     <View style={styles.container}>
@@ -136,19 +126,13 @@ export default function CommunityFeed() {
         </View>
 
         {/* STORIES */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.storyRow}
-        >
-          {stories?.map((story) => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {stories.map((story) => (
             <StoryCircle
               key={story.id}
               story={story}
-              onPress={() => {
-                if (story.isYourStory) handleCreateStory();
-                else console.log("View story:", story.id);
-              }}
+              uploadingStory={uploadingStory && story.isYourStory}
+              onPress={handleCreateStory}
             />
           ))}
         </ScrollView>
@@ -161,7 +145,8 @@ export default function CommunityFeed() {
           <RefreshControl refreshing={loading} onRefresh={loadFeed} />
         }
       >
-        <PostComposer onPosted={loadFeed} />
+        {/* ✅ KHÔNG CÒN onPosted */}
+        <PostComposer />
 
         {posts.map((post) => (
           <PostCard key={post._id} post={post} refresh={loadFeed} />
@@ -174,33 +159,27 @@ export default function CommunityFeed() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-  },
+  container: { flex: 1, backgroundColor: "#0f172a" },
+
   headerWrapper: {
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 24,
     borderBottomWidth: 1,
     borderBottomColor: "#334155",
-    backgroundColor: "#0f172a",
   },
+
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  title: {
-    color: "white",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  headerButtons: {
-    flexDirection: "row",
-    gap: 12,
-  },
+
+  title: { color: "white", fontSize: 24, fontWeight: "bold" },
+
+  headerButtons: { flexDirection: "row", gap: 12 },
+
   iconButton: {
     padding: 10,
     backgroundColor: "#1e293b",
@@ -208,6 +187,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
+
   badge: {
     position: "absolute",
     top: 4,
@@ -217,12 +197,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563eb",
     borderRadius: 99,
   },
-  storyRow: {
-    paddingBottom: 4,
-    marginTop: 10,
-  },
-  feedScroll: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
+
+  feedScroll: { paddingTop: 16 },
 });

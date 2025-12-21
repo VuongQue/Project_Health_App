@@ -1,6 +1,6 @@
 export interface StoryUser {
   name: string;
-  avatar: string;
+  avatar?: string | null;
 }
 
 export interface StoryItem {
