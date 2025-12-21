@@ -97,4 +97,25 @@ export class AchievementService {
     }));
   }
 
+
+  // ===== ADMIN CRUD =====
+  async create(dto: Partial<Achievement>) {
+    const ach = this.achRepo.create(dto);
+    return this.achRepo.save(ach);
+  }
+
+  async update(id: number, dto: Partial<Achievement>) {
+    const ach = await this.achRepo.findOne({ where: { id } });
+    if (!ach) throw new NotFoundException('Achievement not found');
+    Object.assign(ach, dto);
+    return this.achRepo.save(ach);
+  }
+
+  async remove(id: number) {
+    const ach = await this.achRepo.findOne({ where: { id } });
+    if (!ach) throw new NotFoundException('Achievement not found');
+    await this.achRepo.delete(id);
+    return { ok: true };
+  }
+
 }

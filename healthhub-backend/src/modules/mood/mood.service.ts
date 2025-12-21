@@ -14,6 +14,55 @@ import { AchievementEngine } from '../achievement/achievement.engine';
 import { FitnessService } from '../fitness/fitness.service';
 
 
+export interface TodayMoodDto {
+  hasEntry: boolean;
+  date: Date;
+  mood: {
+    score: number;
+    label?: string;
+  } | null;
+  note: string | null;
+}
+
+export interface WeekTrendDto {
+  labels: string[];
+  values: number[];
+}
+
+export interface SummaryDto {
+  averageMood: number;
+  change: number;
+  bestDay: string | null;
+  bestDayScore: number | null;
+}
+
+export interface StreakDto {
+  streak: number;
+}
+
+export interface RecentMoodDto {
+  id: any;
+  date: Date;
+  rating: number;
+  score: number;
+  note: string | null;
+  tags: string[];
+}
+
+export interface DashboardDto {
+  today: TodayMoodDto;
+  insights: {
+    averageMood: number;
+    change: number;
+    bestDay: string | null;
+    bestDayScore: number | null;
+    streak: number;
+  };
+  weekTrend: WeekTrendDto;
+  recent: RecentMoodDto[];
+}
+
+
 @Injectable()
 export class MoodService {
   private readonly logger = new Logger(MoodService.name);
@@ -171,7 +220,7 @@ export class MoodService {
     }
 
   // Hôm nay — trả đúng 1..5
-  async getToday(userId: string) {
+  async getToday(userId: string): Promise<TodayMoodDto> {
     const today = this.normalizeDate(new Date());
     const entry = await this.moodModel
       .findOne({ userId, date: today })
@@ -195,7 +244,7 @@ export class MoodService {
   }
 
   // Streak: số ngày liên tiếp từ hôm nay trở về trước
-  async getStreak(userId: string) {
+  async getStreak(userId: string): Promise<StreakDto>  {
     const today = this.normalizeDate(new Date());
 
     const entries = await this.moodModel
@@ -221,7 +270,7 @@ export class MoodService {
   }
 
   // Weekly Trend — TRẢ VỀ score 1..5 cho FE
-  async getWeekTrend(userId: string) {
+  async getWeekTrend(userId: string): Promise<WeekTrendDto> {
     const today = this.normalizeDate(new Date());
 
     // Lấy ngày thứ 2 của tuần hiện tại
@@ -266,7 +315,7 @@ export class MoodService {
 
 
   // Summary: average, change, bestDayScore (1..5)
-  async getSummary(userId: string) {
+  async getSummary(userId: string): Promise<SummaryDto> {
     const today = this.normalizeDate(new Date());
 
     const startCurrent = this.normalizeDate(
@@ -363,15 +412,31 @@ export class MoodService {
   }
 
   // Dashboard tổng hợp
-  async getDashboard(userId: string) {
-    const [today, summary, streakObj, weekTrend, recent] = await Promise.all([
+  
+
+  async getDashboard(userId: string): Promise<DashboardDto> {
+    const promises = [
       this.getToday(userId),
       this.getSummary(userId),
       this.getStreak(userId),
       this.getWeekTrend(userId),
       this.getRecent(userId, 5),
-    ]);
-
+    ] as const;
+  
+    const [
+      today,
+      summary,
+      streakObj,
+      weekTrend,
+      recent,
+    ] = await Promise.all(promises) as [
+      TodayMoodDto,
+      SummaryDto,
+      StreakDto,
+      WeekTrendDto,
+      RecentMoodDto[]
+    ];
+  
     return {
       today,
       insights: {
@@ -385,6 +450,8 @@ export class MoodService {
       recent,
     };
   }
+  
+  
   async getWorkoutSuggestions(userId: string) {
     const today = await this.getToday(userId);
     const score = today.mood?.score ?? 3;

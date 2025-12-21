@@ -148,19 +148,38 @@ export class AuthService {
   // =========================
   // TOKEN
   // =========================
-  private generateTokens(userId: number, email: string) {
-    const payload = { sub: userId, email };
-
+  private async generateTokens(userId: number, email: string) {
+    const user = await this.usersService.findByEmail(email);
+  
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+  
+    const payload = {
+      sub: userId,
+      email: user.email,
+      role: user.role,
+    };
+  
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_SECRET ?? 'default_secret',
       expiresIn: '1d',
     });
-
+  
     const refreshToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_REFRESH_SECRET ?? 'refresh_secret',
       expiresIn: '7d',
     });
-
-    return { accessToken, refreshToken };
+  
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
+    };
   }
+  
 }

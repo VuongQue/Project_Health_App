@@ -32,6 +32,8 @@ export class Post {
   @Prop({ default: 'approved' })
   status: string;
 
+  isHidden: { type: Boolean, default: false };
+
   _id: Types.ObjectId;
 }
 

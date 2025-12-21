@@ -201,4 +201,14 @@ export class ChallengeService {
     }));
   }
 
+  async findAll() {
+    return this.challengeRepo.find({
+      order: { createdAt: 'DESC' },
+    });
+  }
+  
+  async remove(id: number) {
+    return this.deactivate(id);
+  }
+
 }

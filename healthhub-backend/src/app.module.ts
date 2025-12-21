@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit  } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -18,6 +18,8 @@ import { FriendModule } from './modules/friend/friend.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { ElasticsearchModule } from './modules/elasticsearch/elasticsearch.module';
+import { AdminModule } from './admin/admin.module';
+import { AdminSeedService } from './admin/admin.seed';
 
 @Module({
   imports: [
@@ -55,6 +57,14 @@ import { ElasticsearchModule } from './modules/elasticsearch/elasticsearch.modul
     ChatModule,
     ProfileModule,
     ElasticsearchModule,
+    AdminModule,
   ],
+  providers: [AdminSeedService],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  constructor(private readonly adminSeed: AdminSeedService) {}
+
+  async onModuleInit() {
+    await this.adminSeed.seedAdmin();
+  }
+}

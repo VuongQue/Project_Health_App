@@ -5,6 +5,17 @@ export enum AuthProvider {
   GOOGLE = 'google',
 }
 
+export enum UserRole {
+  USER = 'USER',
+  ADMIN = 'ADMIN',
+}
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  LOCKED = 'LOCKED',
+}
+
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -56,4 +67,14 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
+  role: UserRole;
+
+  @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
+  status: UserStatus;
+
+  @Column({ type: 'datetime', nullable: true })
+  bannedUntil: Date | null;
+
 }

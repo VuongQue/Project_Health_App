@@ -18,5 +18,6 @@ import { UsersModule } from '../users/users.module';
   ],
   controllers: [CommunityController],
   providers: [CommunityService],
+  exports: [CommunityService],
 })
 export class CommunityModule {}

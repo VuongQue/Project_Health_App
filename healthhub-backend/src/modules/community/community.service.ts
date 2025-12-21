@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectModel, } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from './schemas/post.schema';
 import { Comment, CommentDocument } from './schemas/comment.schema';
@@ -8,7 +8,10 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateStoryDto } from './dto/create-story.dto';
 
+
 import { UsersService } from '../users/users.service';
+
+type LeanStory = Omit<Story, '_id'> & { _id: Types.ObjectId };
 
 @Injectable()
 export class CommunityService {
@@ -51,6 +54,7 @@ export class CommunityService {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
+        .populate('author')
         .lean()
         .exec();
 
@@ -58,11 +62,9 @@ export class CommunityService {
         status: 'approved',
       });
 
-      const populated = await Promise.all(
-        posts.map((p) => this.populatePost(p._id)),
-      );
+      
 
-      return { total, page, limit, posts: populated };
+      return { total, page, limit, posts };
     } catch (err) {
       console.error('❌ ERROR in getPosts:', err);
       throw err;
@@ -135,10 +137,11 @@ export class CommunityService {
     const list = await this.storyModel
       .find()
       .sort({ createdAt: -1 })
-      .lean();
-
+      .lean<LeanStory[]>()  
+      .exec();
+  
     return list.map((s) => ({
-      id: s._id.toString(),
+      id: s._id.toString(),    
       user: s.user,
       hasStory: true,
       isYourStory: s.userId === userId,
@@ -146,6 +149,7 @@ export class CommunityService {
       createdAt: s.createdAt,
     }));
   }
+  
 
   // POPULATE POST + 2 COMMENT PREVIEW
   private async populatePost(id: string | Types.ObjectId) {
@@ -232,6 +236,44 @@ export class CommunityService {
       isYourStory: true,
       hasStory: true,
     };
+  }
+
+
+  async adminListPosts(keyword: string, page: number, limit: number) {
+    const skip = (page - 1) * limit;
+    const filter: any = keyword
+      ? { $or: [{ content: new RegExp(keyword, 'i') }, { authorName: new RegExp(keyword, 'i') }] }
+      : {};
+  
+      const items = await this.postModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec();
+    
+    const total = await this.postModel.countDocuments(filter);
+    
+    return { items, total, page, limit };
+    
+  }
+  
+  async adminHidePost(id: string) {
+    return this.postModel.findByIdAndUpdate(id, { isHidden: true }, { new: true });
+  }
+  
+  async adminUnhidePost(id: string) {
+    return this.postModel.findByIdAndUpdate(id, { isHidden: false }, { new: true });
+  }
+  
+  async adminDeletePost(id: string) {
+    await this.postModel.findByIdAndDelete(id);
+    return { ok: true };
+  }
+  
+  async adminCountPosts() {
+    return this.postModel.countDocuments();
   }
 
 }
