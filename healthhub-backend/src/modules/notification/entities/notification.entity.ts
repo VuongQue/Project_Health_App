@@ -16,6 +16,7 @@ export enum NotificationType {
   PLAN = 'PLAN',
   MOOD = 'MOOD',
   SYSTEM = 'SYSTEM',
+  FRIEND_REQUEST = 'FRIEND_REQUEST',
 }
 
 @Entity('notifications')

@@ -5,9 +5,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  ScrollView,
 } from "react-native";
 import { Heart, MessageSquare, Share2 } from "lucide-react-native";
+import { useRouter } from "expo-router";
+
 import { PostItem } from "@/src/types/community";
 import { communityApi } from "@/src/api/communityApi";
 import { PostComments } from "./PostComments";
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function PostCard({ post, refresh }: Props) {
+  const router = useRouter();
   const [liking, setLiking] = useState(false);
   const [showComments, setShowComments] = useState(false);
 
@@ -53,22 +55,55 @@ export function PostCard({ post, refresh }: Props) {
       </View>
 
       {/* CONTENT */}
-      {post.content && <Text style={styles.content}>{post.content}</Text>}
+      {post.content && (
+        <Text style={styles.content}>{post.content}</Text>
+      )}
 
-      {/* MEDIA */}
+      {/* MEDIA – FACEBOOK STYLE */}
       {post.media?.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {post.media.map((url, idx) => (
-            <Image key={idx} source={{ uri: url }} style={styles.mediaImage} />
-          ))}
-        </ScrollView>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() =>
+            router.push(`/(community)/posts/${post._id}` as any)
+          }
+        >
+          <View style={styles.mediaGrid}>
+            {post.media.slice(0, 4).map((uri, index) => {
+              const isLast =
+                index === 3 && post.media.length > 4;
+              const remaining = post.media.length - 4;
+
+              return (
+                <View key={index} style={styles.mediaItem}>
+                  <Image
+                    source={{ uri }}
+                    style={styles.mediaImage}
+                  />
+
+                  {isLast && (
+                    <View style={styles.overlay}>
+                      <Text style={styles.overlayText}>
+                        +{remaining}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
       )}
 
       {/* ACTIONS */}
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={handleLike}
+        >
           <Heart size={18} color="#94a3b8" />
-          <Text style={styles.actionText}>{post.likeCount}</Text>
+          <Text style={styles.actionText}>
+            {post.likeCount}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -76,7 +111,9 @@ export function PostCard({ post, refresh }: Props) {
           onPress={() => setShowComments(!showComments)}
         >
           <MessageSquare size={18} color="#94a3b8" />
-          <Text style={styles.actionText}>{post.commentCount}</Text>
+          <Text style={styles.actionText}>
+            {post.commentCount}
+          </Text>
         </TouchableOpacity>
 
         <Share2 size={18} color="#94a3b8" />
@@ -97,6 +134,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
+  /* HEADER */
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -118,17 +156,49 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     fontSize: 12,
   },
+
+  /* CONTENT */
   content: {
     color: "white",
     marginBottom: 12,
     lineHeight: 20,
   },
-  mediaImage: {
-    width: 260,
-    height: 260,
-    borderRadius: 12,
-    marginRight: 12,
+
+  /* MEDIA GRID (FACEBOOK) */
+  mediaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 8,
   },
+
+  mediaItem: {
+    width: "50%",
+    aspectRatio: 1,
+    borderWidth: 0.5,
+    borderColor: "#020617",
+  },
+
+  mediaImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  overlayText: {
+    color: "white",
+    fontSize: 28,
+    fontWeight: "bold",
+  },
+
+  /* ACTIONS */
   actions: {
     flexDirection: "row",
     gap: 24,

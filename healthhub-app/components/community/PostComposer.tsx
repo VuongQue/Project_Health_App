@@ -23,22 +23,29 @@ export function PostComposer() {
     avatar || "https://ui-avatars.com/api/?name=Me";
 
   return (
+  <View style={styles.wrapper}>
     <View style={styles.card}>
       <Image source={{ uri: myAvatar }} style={styles.avatar} />
 
       <TouchableOpacity
         style={styles.fakeInput}
-        onPress={() => router.push("/(community)/create-post" as any)}
         activeOpacity={0.8}
+        onPress={() => router.push("/(community)/create-post" as any)}
       >
         <Text style={styles.placeholder}>Share your thoughts...</Text>
       </TouchableOpacity>
     </View>
-  );
+  </View>
+);
+
 }
 
 
 const styles = StyleSheet.create({
+  wrapper: {
+    marginHorizontal: 16,
+  },
+
   card: {
     flexDirection: "row",
     alignItems: "center",
@@ -68,4 +75,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 });
+
 

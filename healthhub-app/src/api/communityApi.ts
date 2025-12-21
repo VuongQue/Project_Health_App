@@ -68,4 +68,11 @@ export const communityApi = {
     return results;
   },
 
+  getPostById: async (id: string) => {
+    const res = await axiosClient.get(`/posts/${id}`);
+    return res.data; 
+  },
+  
+  
+
 };

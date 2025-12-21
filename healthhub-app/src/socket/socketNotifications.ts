@@ -1,15 +1,21 @@
-import { io } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 import { getToken } from "@/src/utils/tokenStorage";
 
 const NOTI_URL = "http://192.168.110.205:4000/notifications";
 
-export const createNotificationSocket = async () => {
+let socket: Socket | null = null;
+
+export async function createNotificationSocket(): Promise<Socket> {
+  if (socket) return socket;
+
   let token = await getToken();
   if (token?.startsWith('"')) token = JSON.parse(token);
 
-  return io(NOTI_URL, {
+  socket = io(NOTI_URL, {
     transports: ["websocket"],
     auth: { token },
-    autoConnect: false, 
+    autoConnect: true, // 🔥 kết nối ngay
   });
-};
+
+  return socket;
+}

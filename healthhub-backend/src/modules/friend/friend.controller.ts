@@ -15,38 +15,73 @@ import { AuthGuard } from "@nestjs/passport";
 export class FriendController {
   constructor(private friendService: FriendService) {}
 
+  // ============================
+  // SEND FRIEND REQUEST
+  // ============================
   @Post("request")
-  sendFriendRequest(@Req() req, @Body("toUserId") toUserId: number) {
+  sendFriendRequest(
+    @Req() req,
+    @Body("toUserId") toUserId: number,
+  ) {
     return this.friendService.sendRequest(req.user.userId, toUserId);
   }
 
+  // ============================
+  // ACCEPT / REJECT REQUEST
+  // ============================
   @Post("respond")
   respondRequest(
     @Req() req,
     @Body("requestId") requestId: string,
     @Body("accept") accept: boolean,
   ) {
-    return this.friendService.respondRequest(req.user.userId, requestId, accept);
+    return this.friendService.respondRequest(
+      req.user.userId,
+      requestId,
+      accept,
+    );
   }
 
+  // ============================
+  // FRIEND LIST
+  // ============================
   @Get("list")
   getFriends(@Req() req) {
     return this.friendService.getFriends(req.user.userId);
   }
 
-  @Get("pending")
-  getPending(@Req() req) {
-    return this.friendService.getPendingRequests(req.user.userId);
+  // ============================
+  // REQUESTS I RECEIVED (ACCEPT)
+  // ============================
+  @Get("requests/received")
+  getReceived(@Req() req) {
+    return this.friendService.getReceivedRequests(req.user.userId);
   }
 
+  // ============================
+  // REQUESTS I SENT (REQUESTED)
+  // ============================
+  @Get("requests/sent")
+  getSent(@Req() req) {
+    return this.friendService.getSentRequests(req.user.userId);
+  }
+
+  // ============================
+  // FRIEND SUGGESTION
+  // ============================
   @Get("suggest")
   suggest(@Req() req) {
     return this.friendService.suggestFriends(req.user.userId);
   }
 
+  // ============================
+  // UNFRIEND
+  // ============================
   @Post("unfriend/:targetId")
-  unfriend(@Req() req, @Param("targetId") targetId: number) {
+  unfriend(
+    @Req() req,
+    @Param("targetId") targetId: number,
+  ) {
     return this.friendService.unfriend(req.user.userId, targetId);
   }
 }
-

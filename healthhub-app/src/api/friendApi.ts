@@ -1,48 +1,62 @@
 import axiosClient from "./axiosClient";
 
 export const friendApi = {
-  // Danh sách bạn bè
+  // ============================
+  // FRIEND LIST
+  // ============================
   getFriends: async () => {
-    const res = await axiosClient.get(`/friends/list`);
+    const res = await axiosClient.get("/friends/list");
     return res.data;
   },
 
-  // Lời mời kết bạn đang chờ
-  getPending: async () => {
-    const res = await axiosClient.get(`/friends/pending`);
+  // ============================
+  // REQUESTS I RECEIVED (ACCEPT)
+  // ============================
+  getReceivedRequests: async () => {
+    const res = await axiosClient.get("/friends/requests/received");
     return res.data;
   },
 
-  // Gợi ý kết bạn
+  // ============================
+  // REQUESTS I SENT (REQUESTED)
+  // ============================
+  getSentRequests: async () => {
+    const res = await axiosClient.get("/friends/requests/sent");
+    return res.data;
+  },
+
+  // ============================
+  // FRIEND SUGGESTION
+  // ============================
   suggest: async () => {
-    const res = await axiosClient.get(`/friends/suggest`);
+    const res = await axiosClient.get("/friends/suggest");
     return res.data;
   },
 
-  // Tìm kiếm người dùng
-  search: async (keyword: string) => {
-    const res = await axiosClient.get(`/friends/search?q=${keyword}`);
-    return res.data;
-  },
-
-  // Gửi lời mời kết bạn
+  // ============================
+  // SEND FRIEND REQUEST
+  // ============================
   sendRequest: async (toUserId: number) => {
-    const res = await axiosClient.post(`/friends/request`, {
+    const res = await axiosClient.post("/friends/request", {
       toUserId,
     });
     return res.data;
   },
 
-  // Accept / Reject
+  // ============================
+  // ACCEPT / REJECT REQUEST
+  // ============================
   respond: async (requestId: string, accept: boolean) => {
-    const res = await axiosClient.post(`/friends/respond`, {
+    const res = await axiosClient.post("/friends/respond", {
       requestId,
       accept,
     });
     return res.data;
   },
 
-  // Hủy kết bạn
+  // ============================
+  // UNFRIEND
+  // ============================
   unfriend: async (targetId: number) => {
     const res = await axiosClient.post(`/friends/unfriend/${targetId}`);
     return res.data;

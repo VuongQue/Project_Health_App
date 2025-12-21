@@ -198,5 +198,5 @@ const styles = StyleSheet.create({
     borderRadius: 99,
   },
 
-  feedScroll: { paddingTop: 16 },
+  feedScroll: { paddingTop: 16},
 });
