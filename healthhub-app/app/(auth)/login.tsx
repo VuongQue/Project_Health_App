@@ -115,12 +115,6 @@ export default function LoginScreen() {
           <View style={styles.divider} />
         </View>
 
-        {/* Social logins */}
-        <View style={styles.socialRow}>
-          <SocialButton provider="google" />
-          <SocialButton provider="facebook" />
-          <SocialButton provider="apple" />
-        </View>
 
         {/* Footer */}
         <View style={styles.footer}>

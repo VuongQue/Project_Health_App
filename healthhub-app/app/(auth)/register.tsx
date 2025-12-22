@@ -76,7 +76,7 @@ export default function RegisterScreen() {
 
         <TextInputField
           label="Full Name"
-          placeholder="John Doe"
+          placeholder="Nguyen Van A"
           value={fullName}
           onChange={setFullName}
           icon={<User color="#94a3b8" size={20} />}
@@ -132,11 +132,7 @@ export default function RegisterScreen() {
           <View style={styles.divider} />
         </View>
 
-        <View style={styles.socialRow}>
-          <SocialButton provider="google" />
-          <SocialButton provider="facebook" />
-          <SocialButton provider="apple" />
-        </View>
+        
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account? </Text>
