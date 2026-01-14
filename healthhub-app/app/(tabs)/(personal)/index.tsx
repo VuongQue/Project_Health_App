@@ -62,6 +62,7 @@ export default function DashboardScreen() {
   // ================= DASHBOARD =================
   const fetchDashboard = async () => {
     try {
+      const profileRes = await profileApi.getMe();
       const moodDash = await axiosClient.get("/moods/dashboard");
       const todayScore = normalizeMoodScore(
         moodDash.data?.today?.mood?.score
@@ -79,7 +80,7 @@ export default function DashboardScreen() {
         workoutsCompleted: workoutRes.data?.completed ?? 0,
         workoutsTarget: workoutRes.data?.target ?? 12,
         challenges: challengeRes.data ?? [],
-        achievements: achRes.data ?? [],
+         achievements: profileRes.data?.badges ?? [],
       });
     } catch (err) {
       console.log("⚠️ Dashboard error:", err);

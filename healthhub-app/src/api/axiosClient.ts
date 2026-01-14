@@ -2,7 +2,7 @@ import axios from "axios";
 import { getToken } from "../utils/tokenStorage";
 
 const axiosClient = axios.create({
-  baseURL: "http://192.168.110.205:4000",
+  baseURL: "http://192.168.110.204:4000",
   headers: {
     "Content-Type": "application/json",
     "Accept": "application/json",     

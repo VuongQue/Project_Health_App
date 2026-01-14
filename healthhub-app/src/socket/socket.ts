@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 import { getToken } from "@/src/utils/tokenStorage";
 
-const API_URL = "http://192.168.110.205:4000";
+const API_URL = "http://192.168.110.204:4000";
 
 export const createSocket = async () => {
   let rawToken = await getToken();

@@ -13,7 +13,6 @@ export class NotificationConsumer {
 
   @MessagePattern(TOPIC_NOTIFICATION_EVENTS)
   async handleNotificationEvent(@Payload() event: NotificationEventDto) {
-    // 🔥 event ĐÃ LÀ OBJECT (Nest auto parse)
     if (!event) {
       this.logger.warn('⚠️ Kafka payload is empty');
       return;
@@ -34,7 +33,7 @@ export class NotificationConsumer {
       return;
     }
 
-    // ✅ Save DB + push WS
+    // Save DB + push WS
     await this.notiService.createForUserId(
       Number(event.userId),
       event.type,

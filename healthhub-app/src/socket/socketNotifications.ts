@@ -1,7 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { getToken } from "@/src/utils/tokenStorage";
 
-const NOTI_URL = "http://192.168.110.205:4000/notifications";
+const NOTI_URL = "http://192.168.110.204:4000/notifications";
 
 let socket: Socket | null = null;
 
