@@ -1,199 +1,270 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Image,
-  Modal,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  ActivityIndicator, Image, Modal,
 } from "react-native";
-
+import { LinearGradient } from "expo-linear-gradient";
 import {
-  Award,
-  TrendingUp,
-  Settings,
-  Flame,
-  Star,
-  User,
-  LogOut,
-  Pencil,
+  Award, TrendingUp, Settings, Flame, Star, User, LogOut,
+  Pencil, Dumbbell, ChevronRight, Shield, BarChart2,
 } from "lucide-react-native";
-
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { clearToken } from "@/src/utils/tokenStorage";
+import { simpleCache } from "@/src/utils/simpleCache";
 import { profileApi } from "@/src/api/profileApi";
 import { UserProfile } from "@/src/types/profile";
 import { ACHIEVEMENT_ICONS } from "@/src/icons/achievementIcons";
+import { useColors, Colors, Shadow, Spacing, Radius, Typography, sw, sf } from "@/src/theme";
+import { useTheme } from "@/src/context/ThemeContext";
+import { useTranslation } from "react-i18next";
+import { useScreenTour, useScreenTourStep } from "@/src/context/ScreenTourContext";
+
+const LEVEL_THRESHOLDS = [0, 100, 250, 500, 1000, 2000, 4000, 7000, 11000, 16000];
+
+function getLevelProgress(points: number, level: number) {
+  const idx = Math.max(0, level - 1);
+  const current = LEVEL_THRESHOLDS[idx] ?? 0;
+  const next = LEVEL_THRESHOLDS[idx + 1] ?? current + 1;
+  return Math.min(1, (points - current) / (next - current));
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const colors = useColors();
+  const { isDark } = useTheme();
+  const { t } = useTranslation();
+  const { startScreenTour } = useScreenTour();
+  const tourStartedRef = useRef(false);
+  const step0 = useScreenTourStep(0); // XP bar in hero
+  const step1 = useScreenTourStep(1); // Stats row
+  const step2 = useScreenTourStep(2); // Quick links (settings, stats...)
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  const [showSettings, setShowSettings] = useState(false);
-  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
+  useFocusEffect(useCallback(() => {
+    const cached = simpleCache.get<UserProfile>("profile:me");
+    if (cached) {
+      setProfile(cached);
+      setLoading(false);
+      return;
+    }
+    profileApi.getMe().then((res) => {
+      simpleCache.set("profile:me", res.data, 2 * 60_000);
+      setProfile(res.data);
+    }).finally(() => setLoading(false));
+  }, []));
 
   useEffect(() => {
-    profileApi
-      .getMe()
-      .then((res) => setProfile(res.data))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!loading && !tourStartedRef.current) {
+      tourStartedRef.current = true;
+      startScreenTour('profile', [
+        {
+          id: 'xp',
+          placement: 'bottom',
+          icon: '⭐',
+          title: 'Cấp độ & Điểm XP',
+          body: 'Thanh tiến trình hiển thị XP hiện tại so với level tiếp theo. Nhấn nút bút chì để chỉnh sửa ảnh đại diện và thông tin cá nhân.',
+        },
+        {
+          id: 'stats',
+          placement: 'bottom',
+          icon: '📊',
+          title: 'Thống kê tổng hợp',
+          body: 'Tổng số buổi tập, số huy hiệu đã mở khoá và streak ngày hoạt động liên tiếp hiện tại của bạn.',
+        },
+        {
+          id: 'links',
+          placement: 'top',
+          icon: '⚙️',
+          title: 'Công cụ & Cài đặt',
+          body: 'Xem thống kê nâng cao (heatmap, biểu đồ), tất cả thành tích, báo cáo sức khoẻ, và thay đổi cài đặt app tại đây.',
+        },
+      ]);
+    }
+  }, [loading]);
 
   const handleLogout = async () => {
     await clearToken();
+    await AsyncStorage.removeItem('@tour_pending');
     router.replace("/login");
   };
 
   if (loading || !profile) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+      <View style={[styles.center, { backgroundColor: colors.bgSecondary }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
-  const { user, stats, badges, challenges } = profile;
-  const previewBadges = badges?.slice(0, 6) ?? [];
+  const { user, stats, badges } = profile;
+  const previewBadges = (badges ?? []).slice(0, 6);
+  const level = user.level ?? 1;
+  const points = user.points ?? 0;
+  const lvProgress = getLevelProgress(points, level);
+  const nextLevelPts = LEVEL_THRESHOLDS[level] ?? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1];
 
   return (
     <>
-      <ScrollView style={styles.container}>
-        {/* ===== HEADER ===== */}
-        <View style={styles.header}>
-          <View style={styles.row}>
-            <View style={styles.avatar}>
-              {user.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
-              ) : (
-                <User size={40} color="white" />
-              )}
-            </View>
+      <ScrollView style={[styles.container, { backgroundColor: colors.bgSecondary }]} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Hero */}
+        <View style={[styles.hero, { backgroundColor: colors.bgPrimary, borderBottomColor: colors.border }]}>
+          <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: colors.bgCardElevated }]} onPress={() => setShowMenu(true)}>
+            <Settings size={18} color={colors.textMuted} />
+          </TouchableOpacity>
 
-            <View>
-              <Text style={styles.title}>{user.fullName}</Text>
-              <Text style={styles.subtitle}>@{user.username}</Text>
-
-              <View style={styles.row}>
-                <View style={styles.levelTag}>
-                  <Star size={12} color="#60a5fa" />
-                  <Text style={styles.levelText}>Level {user.level || 1}</Text>
-                </View>
-                <Text style={styles.points}>{user.points || 0} pts</Text>
-              </View>
-            </View>
+          {/* Avatar */}
+          <View style={styles.avatarWrap}>
+            {user.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={[styles.avatarImg, { borderColor: colors.primary }]} />
+            ) : (
+              <LinearGradient colors={Colors.gradientPrimary} style={styles.avatarFallback}>
+                <User size={38} color="white" />
+              </LinearGradient>
+            )}
+            <TouchableOpacity style={[styles.editBadge, { backgroundColor: colors.primary, borderColor: colors.bgPrimary }]} onPress={() => router.push("/profile/edit")}>
+              <Pencil size={11} color="white" />
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => setShowSettings(true)}
+          <Text style={[styles.heroName, { color: colors.textPrimary }]}>{user.fullName}</Text>
+          <Text style={[styles.heroUsername, { color: colors.textMuted }]}>@{user.username}</Text>
+
+          <View style={styles.levelRow}>
+            <View style={[styles.levelPill, { backgroundColor: colors.warningBg }]}>
+              <Star size={9} color={colors.warning} fill={colors.warning} />
+              <Text style={[styles.levelPillText, { color: colors.warning }]}>{t("profile.level", { level })}</Text>
+            </View>
+            <Text style={[styles.pointsText, { color: colors.textMuted }]}>{t("profile.xp", { points: points.toLocaleString() })}</Text>
+          </View>
+
+          {/* XP bar */}
+          <View
+            ref={step0.ref}
+            onLayout={step0.measure}
+            style={styles.xpWrap}
           >
-            <Settings color="#cbd5e1" size={20} />
+            <View style={styles.xpRow}>
+              <Text style={[styles.xpLabel, { color: colors.textMuted }]}>XP đến Level {level + 1}</Text>
+              <Text style={[styles.xpVal, { color: colors.primary }]}>{points.toLocaleString()} / {nextLevelPts.toLocaleString()}</Text>
+            </View>
+            <View style={[styles.xpTrack, { backgroundColor: colors.border }]}>
+              <LinearGradient colors={Colors.gradientPrimary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.xpFill, { width: `${Math.round(lvProgress * 100)}%` as any }]} />
+            </View>
+          </View>
+        </View>
+
+        {/* Stats */}
+        <View
+          ref={step1.ref}
+          onLayout={step1.measure}
+          style={styles.statsRow}
+        >
+          {[
+            { icon: <Dumbbell size={18} color={colors.primary} />, bg: colors.primaryBg, val: stats?.totalWorkouts ?? 0, label: t("profile.workouts") },
+            { icon: <Award size={18} color={colors.purple} />, bg: colors.purpleBg, val: stats?.badgesEarned ?? 0, label: t("profile.badges") },
+            { icon: <Flame size={18} color={colors.orange} />, bg: colors.orangeBg, val: stats?.currentStreak ?? 0, label: t("profile.streak") },
+          ].map((s, i) => (
+            <View key={i} style={[styles.statCard, { backgroundColor: colors.bgCard, borderColor: colors.border }, isDark ? {} : Shadow.sm]}>
+              <View style={[styles.statIcon, { backgroundColor: s.bg }]}>{s.icon}</View>
+              <Text style={[styles.statVal, { color: colors.textPrimary }]}>{s.val}</Text>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Badges */}
+        {previewBadges.length > 0 && (
+          <View style={[styles.section, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t("profile.badges_section")}</Text>
+              <TouchableOpacity style={styles.seeAllBtn} onPress={() => router.push("/achievements")}>
+                <Text style={[styles.seeAll, { color: colors.primary }]}>{t("profile.see_all_badges")}</Text>
+                <ChevronRight size={13} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.badgeGrid}>
+              {previewBadges.map((b, i) => {
+                const Icon = ACHIEVEMENT_ICONS[b.code ?? ""] || Award;
+                return (
+                  <View key={i} style={styles.badgeCard}>
+                    <View style={[styles.badgeIconWrap, { backgroundColor: colors.warningBg, borderColor: colors.warning + "25" }]}>
+                      <Icon size={22} color={colors.warning} />
+                    </View>
+                    <Text style={[styles.badgeName, { color: colors.textSecondary }]} numberOfLines={2}>{b.name}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Quick links */}
+        <View
+          ref={step2.ref}
+          onLayout={step2.measure}
+          style={[styles.section, { backgroundColor: colors.bgCard, borderColor: colors.border }]}
+        >
+          {[
+            { icon: <TrendingUp size={17} color={colors.primary} />, bg: colors.primaryBg, label: t("profile.advanced_stats"), route: "/advanced-stats" },
+            { icon: <Award size={17} color={colors.warning} />, bg: colors.warningBg, label: t("profile.all_achievements"), route: "/achievements" },
+            { icon: <BarChart2 size={17} color={colors.purple} />, bg: colors.purpleBg, label: t("profile.health_report"), route: "/health-report" },
+            { icon: <Settings size={17} color={colors.textMuted} />, bg: colors.bgCardElevated, label: t("profile.settings"), route: "/settings" },
+          ].map((item, i, arr) => (
+            <TouchableOpacity key={i} style={[styles.linkRow, { borderBottomColor: colors.border }, i === arr.length - 1 && { borderBottomWidth: 0 }]} onPress={() => router.push(item.route as any)} activeOpacity={0.7}>
+              <View style={[styles.linkIcon, { backgroundColor: item.bg }]}>{item.icon}</View>
+              <Text style={[styles.linkLabel, { color: colors.textPrimary }]}>{item.label}</Text>
+              <ChevronRight size={15} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={[styles.linkRow, { borderBottomWidth: 0 }]} onPress={() => setShowLogoutConfirm(true)} activeOpacity={0.7}>
+            <View style={[styles.linkIcon, { backgroundColor: "rgba(239,68,68,0.12)" }]}><LogOut size={17} color={colors.danger} /></View>
+            <Text style={[styles.linkLabel, { color: colors.danger }]}>{t("profile.logout")}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ===== STATS ===== */}
-        <View style={styles.rowWrap}>
-          <StatBox
-            label="Total Workouts"
-            value={stats.totalWorkouts}
-            color="#3b82f6"
-            icon={TrendingUp}
-          />
-          <StatBox
-            label="Badges Earned"
-            value={stats.badgesEarned}
-            color="#a855f7"
-            icon={Award}
-          />
-          <StatBox
-            label="Current Streak"
-            value={stats.currentStreak}
-            color="#f97316"
-            icon={Flame}
-          />
-        </View>
-
-
-        {/* ===== BADGES (UNLOCKED ONLY) ===== */}
-        <View style={styles.badgeHeader}>
-          <Text style={styles.sectionTitle}>Badges</Text>
-          <TouchableOpacity onPress={() => router.push("/achievements")}>
-            <Text style={styles.linkText}>View All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.badgeGrid}>
-          {previewBadges.map((b, i) => {
-            const code = b.code ?? "";
-            const Icon = ACHIEVEMENT_ICONS[code] || Award;
-
-            return (
-              <View key={i} style={[styles.badgeCard, styles.badgeUnlocked]}>
-                <Icon size={28} color="#facc15" />
-                <Text style={styles.badgeName}>{b.name}</Text>
-              </View>
-            );
-          })}
-        </View>
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* ===== SETTINGS ===== */}
-      <Modal visible={showSettings} transparent animationType="slide">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          onPress={() => setShowSettings(false)}
-        />
-        <View style={styles.sheet}>
-          <TouchableOpacity
-            style={styles.sheetBtn}
-            onPress={() => {
-              setShowSettings(false);
-              router.push("/profile/edit");
-            }}
-          >
-            <Pencil size={20} color="white" />
-            <Text style={styles.sheetText}>Edit Profile</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.sheetBtn, { backgroundColor: "#ef4444" }]}
-            onPress={() => {
-              setShowSettings(false);
-              setShowConfirmLogout(true);
-            }}
-          >
-            <LogOut size={20} color="white" />
-            <Text style={styles.sheetText}>Logout</Text>
-          </TouchableOpacity>
+      {/* Bottom sheet menu */}
+      <Modal visible={showMenu} transparent animationType="slide">
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setShowMenu(false)} />
+        <View style={[styles.sheet, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>{t("profile.menu_title")}</Text>
+          {[
+            { icon: <Pencil size={17} color={colors.primary} />, bg: colors.primaryBg, label: t("profile.edit_profile"), action: () => { setShowMenu(false); router.push("/profile/edit"); } },
+            { icon: <Settings size={17} color={colors.textSecondary} />, bg: colors.bgCardElevated, label: t("profile.settings"), action: () => { setShowMenu(false); router.push("/settings" as any); } },
+            { icon: <LogOut size={17} color={colors.danger} />, bg: colors.dangerBg, label: t("profile.logout"), labelColor: colors.danger, action: () => { setShowMenu(false); setShowLogoutConfirm(true); } },
+          ].map((item, i, arr) => (
+            <TouchableOpacity key={i} style={[styles.sheetRow, { borderBottomColor: colors.border }, i === arr.length - 1 && { borderBottomWidth: 0 }]} onPress={item.action}>
+              <View style={[styles.sheetIcon, { backgroundColor: item.bg }]}>{item.icon}</View>
+              <Text style={[styles.sheetLabel, { color: colors.textPrimary }, item.labelColor ? { color: item.labelColor } : null]}>{item.label}</Text>
+              <ChevronRight size={15} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
         </View>
       </Modal>
 
-      {/* ===== LOGOUT CONFIRM ===== */}
-      <Modal visible={showConfirmLogout} transparent animationType="fade">
-        <View style={styles.centerBox}>
-          <View style={styles.confirmBox}>
-            <Text style={styles.confirmTitle}>Đăng xuất?</Text>
-            <Text style={styles.confirmSubtitle}>
-              Bạn có chắc muốn đăng xuất tài khoản?
-            </Text>
-
-            <View style={styles.confirmActions}>
-              <TouchableOpacity
-                style={[styles.confirmBtn, { backgroundColor: "#334155" }]}
-                onPress={() => setShowConfirmLogout(false)}
-              >
-                <Text style={styles.confirmText}>Cancel</Text>
+      {/* Logout confirm */}
+      <Modal visible={showLogoutConfirm} transparent animationType="fade">
+        <View style={styles.confirmOverlay}>
+          <View style={[styles.confirmBox, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={styles.confirmIconWrap}>
+              <LogOut size={26} color={colors.danger} />
+            </View>
+            <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>{t("profile.logout_title")}</Text>
+            <Text style={[styles.confirmSub, { color: colors.textSecondary }]}>{t("profile.logout_msg")}</Text>
+            <View style={styles.confirmBtns}>
+              <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.bgCardElevated, borderColor: colors.border }]} onPress={() => setShowLogoutConfirm(false)}>
+                <Text style={[styles.confirmBtnText, { color: colors.textSecondary }]}>{t("profile.logout_cancel")}</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.confirmBtn, { backgroundColor: "#ef4444" }]}
-                onPress={handleLogout}
-              >
-                <Text style={styles.confirmText}>Logout</Text>
+              <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.danger }]} onPress={handleLogout}>
+                <Text style={[styles.confirmBtnText, { color: "white" }]}>{t("profile.logout_confirm")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -203,241 +274,64 @@ export default function ProfileScreen() {
   );
 }
 
-/* ===== SMALL COMPONENT ===== */
-function StatBox({ label, value, icon: Icon, color }: any) {
-  return (
-    <View style={styles.statBox}>
-      <View style={[styles.iconBox, { backgroundColor: color + "20" }]}>
-        <Icon color={color} size={18} />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-/* ===== STYLES ===== */
-// ⚠️ styles giữ nguyên như bạn đang dùng (không thay đổi)
-
-
-/* ================= STYLES ================= */
-
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#0f172a", flex: 1, padding: 16 },
+  container: { flex: 1 },
+  content: { paddingBottom: 20 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
+  hero: { paddingTop: sw(52), paddingHorizontal: Spacing.base, paddingBottom: Spacing.xl, alignItems: "center", borderBottomWidth: 1 },
+  settingsBtn: { position: "absolute", top: sw(52), right: Spacing.base, width: sw(38), height: sw(38), borderRadius: Radius.lg, alignItems: "center", justifyContent: "center" },
+  avatarWrap: { position: "relative", width: sw(88), height: sw(88), marginBottom: sw(12), marginTop: Spacing.sm },
+  avatarImg: { width: sw(88), height: sw(88), borderRadius: sw(44), borderWidth: 2.5 },
+  avatarFallback: { width: sw(88), height: sw(88), borderRadius: sw(44), alignItems: "center", justifyContent: "center" },
+  editBadge: { position: "absolute", bottom: sw(2), right: sw(2), width: sw(24), height: sw(24), borderRadius: sw(12), alignItems: "center", justifyContent: "center", borderWidth: 2 },
+  heroName: { fontSize: sf(22), fontWeight: "800", marginBottom: 3 },
+  heroUsername: { fontSize: sf(13), marginBottom: Spacing.sm },
+  levelRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.base },
+  levelPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: sw(10), paddingVertical: sw(5), borderRadius: Radius.full },
+  levelPillText: { fontSize: sf(11), fontWeight: "700" },
+  pointsText: { fontSize: sf(12) },
+  xpWrap: { width: "100%", marginTop: sw(4) },
+  xpRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: sw(6) },
+  xpLabel: { fontSize: sf(12) },
+  xpVal: { fontSize: sf(12), fontWeight: "600" },
+  xpTrack: { height: sw(6), borderRadius: sw(3), overflow: "hidden" },
+  xpFill: { height: "100%", borderRadius: sw(3) },
 
-  row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between" },
+  statsRow: { flexDirection: "row", gap: Spacing.sm, marginHorizontal: Spacing.base, marginTop: -Spacing.base, marginBottom: Spacing.base },
+  statCard: { flex: 1, borderRadius: Radius.xl, padding: Spacing.md, alignItems: "center", gap: 5, borderWidth: 1 },
+  statIcon: { width: sw(38), height: sw(38), borderRadius: sw(11), justifyContent: "center", alignItems: "center", marginBottom: 2 },
+  statVal: { fontSize: sf(22), fontWeight: "800" },
+  statLabel: { fontSize: sf(11) },
 
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#3b82f6",
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-  },
+  section: { marginHorizontal: Spacing.base, marginBottom: Spacing.base, borderRadius: Radius.xl, borderWidth: 1, overflow: "hidden" },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingTop: Spacing.base, paddingBottom: Spacing.sm },
+  sectionTitle: { ...Typography.md, fontWeight: "700" },
+  seeAllBtn: { flexDirection: "row", alignItems: "center", gap: 2 },
+  seeAll: { ...Typography.xs, fontWeight: "600" },
+  badgeGrid: { flexDirection: "row", flexWrap: "wrap", padding: Spacing.sm, gap: Spacing.sm },
+  badgeCard: { width: "30%", alignItems: "center", padding: Spacing.sm, gap: Spacing.xs },
+  badgeIconWrap: { width: sw(50), height: sw(50), borderRadius: Radius.lg, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  badgeName: { fontSize: sf(10), textAlign: "center" },
 
-  avatarImg: { width: "100%", height: "100%", borderRadius: 36 },
+  linkRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.base, paddingHorizontal: Spacing.base, borderBottomWidth: 1 },
+  linkIcon: { width: sw(36), height: sw(36), borderRadius: sw(10), alignItems: "center", justifyContent: "center" },
+  linkLabel: { flex: 1, fontSize: sf(15), fontWeight: "500" },
 
-  title: { color: "white", fontSize: 20, fontWeight: "bold" },
-  subtitle: { color: "#94a3b8", fontSize: 13 },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
+  sheet: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.base, paddingBottom: sw(40), borderTopWidth: 1 },
+  sheetHandle: { width: sw(36), height: sw(4), borderRadius: 2, alignSelf: "center", marginBottom: Spacing.base },
+  sheetTitle: { fontSize: sf(18), fontWeight: "700", marginBottom: Spacing.base },
+  sheetRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.base, borderBottomWidth: 1 },
+  sheetIcon: { width: sw(40), height: sw(40), borderRadius: Radius.md, alignItems: "center", justifyContent: "center" },
+  sheetLabel: { flex: 1, fontSize: sf(15), fontWeight: "500" },
 
-  levelTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(37,99,235,0.2)",
-    paddingHorizontal: 6,
-    borderRadius: 8,
-  },
-
-  levelText: { color: "#60a5fa", fontSize: 11, marginLeft: 4 },
-  points: { color: "#64748b", fontSize: 11 },
-
-  iconBtn: {
-  width: 44,             
-  height: 44,             
-  borderRadius: 14,
-  backgroundColor: "#1e293b",
-  alignItems: "center",
-  justifyContent: "center",
-  alignSelf: "center", 
-
-
-  shadowColor: "#000",
-  shadowOpacity: 0.25,
-  shadowRadius: 6,
-  elevation: 4,
-},
-
-
-  rowWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    rowGap: 10,
-  },
-
-  statBox: {
-    width: "48%",
-    backgroundColor: "#1e293b",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 16,
-    padding: 12,
-  },
-
-  iconBox: { padding: 8, borderRadius: 10, marginBottom: 4 },
-  statValue: { color: "white", fontSize: 20, fontWeight: "600" },
-  statLabel: { color: "#94a3b8", fontSize: 12 },
-
-  sectionTitle: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-    marginVertical: 12,
-  },
-
-  challengeCard: {
-    backgroundColor: "#1e293b",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#334155",
-    padding: 12,
-    marginBottom: 10,
-  },
-
-  textWhite: { color: "white" },
-  textMuted: { color: "#94a3b8", fontSize: 13 },
-
-  progressBg: {
-    backgroundColor: "#334155",
-    borderRadius: 4,
-    height: 8,
-    marginTop: 6,
-  },
-
-  progressFill: {
-    height: "100%",
-    borderRadius: 4,
-    backgroundColor: "#2563eb",
-  },
-
-  badgeHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  linkText: { color: "#3b82f6", fontSize: 13 },
-
-  badgeGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-
-  badgeCard: {
-    width: "30%",
-    borderRadius: 16,
-    alignItems: "center",
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-  },
-
-  badgeUnlocked: {
-    backgroundColor: "#1e293b",
-    borderColor: "#facc15",
-  },
-
-  badgeLocked: {
-    backgroundColor: "#0f172a",
-    borderColor: "#334155",
-    opacity: 0.6,
-  },
-
-  badgeName: {
-    color: "white",
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: 6,
-  },
-
-  modalOverlay: {
-    backgroundColor: "rgba(0,0,0,0.5)",
-    position: "absolute",
-    inset: 0,
-  },
-
-  sheet: {
-    backgroundColor: "#1e293b",
-    padding: 16,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    position: "absolute",
-    bottom: 0,
-    width: "100%",
-  },
-
-  sheetBtn: {
-    padding: 14,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#334155",
-    marginBottom: 10,
-  },
-
-  sheetText: { color: "white", fontSize: 16, fontWeight: "500" },
-
-  centerBox: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.6)",
-  },
-
-  confirmBox: {
-    width: "80%",
-    backgroundColor: "#1e293b",
-    padding: 20,
-    borderRadius: 16,
-  },
-
-  confirmTitle: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-
-  confirmSubtitle: {
-    color: "#94a3b8",
-    fontSize: 14,
-    marginBottom: 16,
-  },
-
-  confirmActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginHorizontal: 5,
-    alignItems: "center",
-  },
-
-  confirmText: { color: "white", fontSize: 15, fontWeight: "500" },
+  confirmOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" },
+  confirmBox: { width: "82%", borderRadius: Radius.xxl, padding: Spacing.xl, alignItems: "center", borderWidth: 1 },
+  confirmIconWrap: { width: sw(58), height: sw(58), borderRadius: sw(29), backgroundColor: "rgba(239,68,68,0.12)", alignItems: "center", justifyContent: "center", marginBottom: Spacing.base },
+  confirmTitle: { fontSize: sf(18), fontWeight: "700", marginBottom: Spacing.sm },
+  confirmSub: { fontSize: sf(14), textAlign: "center", marginBottom: Spacing.lg },
+  confirmBtns: { flexDirection: "row", gap: Spacing.sm, width: "100%" },
+  confirmBtn: { flex: 1, paddingVertical: sw(12), borderRadius: Radius.xl, alignItems: "center", borderWidth: 1 },
+  confirmBtnText: { fontSize: sf(15), fontWeight: "600" },
 });

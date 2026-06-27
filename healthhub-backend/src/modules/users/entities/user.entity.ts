@@ -56,6 +56,9 @@ export class User {
   @Column({ nullable: true })
   dailyGoal: string;
 
+  @Column({ nullable: true })
+  expoPushToken: string;
+
   @Column({ default: 1 })
   level: number;
 
@@ -76,5 +79,8 @@ export class User {
 
   @Column({ type: 'datetime', nullable: true })
   bannedUntil: Date | null;
+
+  @Column({ default: 0 })
+  warningCount: number;
 
 }

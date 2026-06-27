@@ -6,7 +6,7 @@ export type PostDocument = Post & Document;
 @Schema({ timestamps: true })
 export class Post {
   @Prop({ type: String, required: true })
-  userId: string; // user từ MySQL
+  userId: string;
 
   @Prop({ type: Object })
   user: {
@@ -24,7 +24,7 @@ export class Post {
   likeCount: number;
 
   @Prop({ type: [String], default: [] })
-  likes: string[]; // lưu userId MySQL
+  likes: string[];
 
   @Prop({ default: 0 })
   commentCount: number;
@@ -32,9 +32,17 @@ export class Post {
   @Prop({ default: 'approved' })
   status: string;
 
-  isHidden: { type: Boolean, default: false };
+  @Prop({ default: false })
+  isHidden: boolean;
+
+  // null = post thường; ObjectId = bài đăng trong group
+  @Prop({ type: Types.ObjectId, ref: 'Group', default: null })
+  groupId?: Types.ObjectId;
 
   _id: Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);
+PostSchema.index({ content: 'text' }); // full-text search

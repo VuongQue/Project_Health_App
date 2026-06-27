@@ -19,5 +19,14 @@ export const chatApi = {
   sendMessage: async (payload: { roomId: string; text: string }) => {
     const res = await axiosClient.post("/chat/message", payload);
     return res.data;
-  }
+  },
+
+  getUnreadCount: async (): Promise<number> => {
+    const res = await axiosClient.get("/chat/unread-count");
+    return res.data?.count ?? 0;
+  },
+
+  markRoomAsRead: async (roomId: string): Promise<void> => {
+    await axiosClient.patch(`/chat/rooms/${roomId}/read`);
+  },
 };

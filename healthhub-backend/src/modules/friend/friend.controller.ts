@@ -75,6 +75,22 @@ export class FriendController {
   }
 
   // ============================
+  // LEADERBOARD (points)
+  // ============================
+  @Get("leaderboard")
+  getLeaderboard(@Req() req) {
+    return this.friendService.getLeaderboard(req.user.userId);
+  }
+
+  // ============================
+  // STEPS LEADERBOARD (today)
+  // ============================
+  @Get("leaderboard/steps")
+  getStepsLeaderboard(@Req() req) {
+    return this.friendService.getStepsLeaderboard(req.user.userId);
+  }
+
+  // ============================
   // UNFRIEND
   // ============================
   @Post("unfriend/:targetId")

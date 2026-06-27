@@ -1,29 +1,58 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { AppLogger, winstonLogger } from './common/logger/app-logger.service';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { ThrottlerGuard } from '@nestjs/throttler';
+import { randomUUID } from 'crypto';
+
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000,http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim());
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const appLogger = new AppLogger();
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  const app = await NestFactory.create(AppModule, {
+    logger: appLogger,
+    bufferLogs: true,
+  });
+
+  // Gắn x-request-id vào mỗi request để trace log theo request
+  app.use((req: any, _res: any, next: () => void) => {
+    req.headers['x-request-id'] ??= randomUUID();
+    next();
+  });
+
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.enableCors();
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // --- Swagger Setup ---
-  const config = new DocumentBuilder()
+  app.enableCors({
+    origin: (origin, callback) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        winstonLogger.warn(`CORS blocked: ${origin}`, { context: 'CORS' });
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
+    credentials: true,
+  });
+
+  // Swagger
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('HealthHub API')
     .setDescription('Backend API for Health & Wellness App')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
+  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-  // -----------------------
-
+  // Kafka microservice
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.KAFKA,
     options: {
@@ -31,22 +60,22 @@ async function bootstrap() {
         clientId: 'healthhub-notification',
         brokers: (process.env.KAFKA_BROKERS ?? 'localhost:9094').split(','),
       },
-      consumer: {
-        groupId: 'notification-service-group',
-      },
+      consumer: { groupId: 'notification-service-group' },
     },
   });
 
-
   await app.startAllMicroservices();
 
-  app.useLogger(['error', 'warn', 'log']);
   const port = process.env.PORT || 4000;
   await app.listen(port);
 
-  const logger = new Logger('Bootstrap');
-  logger.log(`🚀 Application is running on: http://localhost:${port}`);
-  logger.log(`📘 Swagger Docs at http://localhost:${port}/api/docs`);
-  logger.log(`🟠 Kafka consumer connected`);
+  winstonLogger.info(`Application running on http://localhost:${port}`, { context: 'Bootstrap' });
+  winstonLogger.info(`Swagger docs: http://localhost:${port}/api/docs`, { context: 'Bootstrap' });
+  winstonLogger.info(`Environment: ${process.env.NODE_ENV ?? 'development'}`, { context: 'Bootstrap' });
+  winstonLogger.info(`Log level: ${process.env.LOG_LEVEL ?? 'auto'}`, { context: 'Bootstrap' });
 }
-bootstrap();
+
+bootstrap().catch((err) => {
+  winstonLogger.error('Fatal error during bootstrap', { error: err?.message, stack: err?.stack });
+  process.exit(1);
+});

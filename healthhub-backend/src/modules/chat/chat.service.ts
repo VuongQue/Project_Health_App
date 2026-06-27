@@ -1,91 +1,50 @@
 import {
   Injectable,
   BadRequestException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ChatRoom, ChatRoomDocument } from './schemas/chat-room.schema';
-import {
-  ChatMessage,
-  ChatMessageDocument,
-} from './schemas/chat-message.schema';
+import { ChatMessage, ChatMessageDocument } from './schemas/chat-message.schema';
 import { SendMessageDto } from './dto/send-message.dto';
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     @InjectModel(ChatRoom.name) private roomModel: Model<ChatRoomDocument>,
-    @InjectModel(ChatMessage.name)
-    private messageModel: Model<ChatMessageDocument>,
+    @InjectModel(ChatMessage.name) private messageModel: Model<ChatMessageDocument>,
   ) {}
 
-  /** FIND OR CREATE ROOM */
   async findOrCreateRoom(userId: string, otherUserId: string) {
     const uid = String(userId);
     const oid = String(otherUserId);
 
-    console.log('[ChatService][findOrCreateRoom] uid =', uid, ', oid =', oid);
-
-    let room = await this.roomModel.findOne({
-      participants: { $all: [uid, oid] },
-    });
-
-    if (room) {
-      console.log(
-        '[ChatService][findOrCreateRoom] found existing room id =',
-        room.id,
-      );
-    }
+    let room = await this.roomModel.findOne({ participants: { $all: [uid, oid] } });
 
     if (!room) {
-      room = await this.roomModel.create({
-        participants: [uid, oid],
-        lastMessageAt: new Date(),
-      });
-      console.log(
-        '[ChatService][findOrCreateRoom] created new room id =',
-        room.id,
-      );
+      room = await this.roomModel.create({ participants: [uid, oid], lastMessageAt: new Date() });
+      this.logger.debug(`Created chat room ${room.id} for users ${uid}, ${oid}`);
     }
 
     return room;
   }
 
-  /** SEND MESSAGE */
   async sendMessage(senderId: string, dto: SendMessageDto) {
     const sender = String(senderId);
-    console.log('================ CHAT SERVICE SEND =================');
-    console.log('[ChatService][sendMessage] senderId =', sender);
-    console.log('[ChatService][sendMessage] dto =', dto);
-
     let room: ChatRoomDocument | null;
 
     if (dto.roomId) {
-      const roomId = String(dto.roomId);
-      console.log('[ChatService][sendMessage] using roomId =', roomId);
-      room = await this.roomModel.findById(roomId);
-      if (!room) {
-        console.error(
-          '[ChatService][sendMessage] ❌ Room not found with id =',
-          roomId,
-        );
-        throw new NotFoundException('Room not found');
-      }
+      room = await this.roomModel.findById(String(dto.roomId));
+      if (!room) throw new NotFoundException('Room not found');
     } else if (dto.receiverId) {
-      console.log(
-        '[ChatService][sendMessage] no roomId, use receiverId =',
-        dto.receiverId,
-      );
       room = await this.findOrCreateRoom(sender, String(dto.receiverId));
     } else {
-      console.error(
-        '[ChatService][sendMessage] ❌ Missing roomId and receiverId',
-      );
       throw new BadRequestException('roomId or receiverId is required');
     }
-
-    console.log('[ChatService][sendMessage] final roomId =', room.id);
 
     const message = await this.messageModel.create({
       roomId: room.id,
@@ -94,80 +53,64 @@ export class ChatService {
       readBy: [sender],
     });
 
-    console.log(
-      '[ChatService][sendMessage] created message id =',
-      message.id,
-      ' | text =',
-      message.text,
-    );
-
     room.lastMessage = dto.text;
     room.lastMessageAt = new Date();
     await room.save();
-    console.log('[ChatService][sendMessage] updated room lastMessage');
 
     const obj = message.toObject();
-
-    const result = {
+    return {
       ...obj,
       senderId: String(obj.senderId),
       roomId: String(obj.roomId ?? room.id),
     };
-
-    console.log('[ChatService][sendMessage] return =', result);
-    console.log('====================================================');
-
-    return result;
   }
 
-  /** GET USER ROOMS */
   async getUserRooms(userId: string) {
     const uid = String(userId);
-    console.log('[ChatService][getUserRooms] userId =', uid);
-
-    const rooms = await this.roomModel
-      .find({ participants: uid })
-      .sort({ updatedAt: -1 });
-
-    console.log(
-      '[ChatService][getUserRooms] count =',
-      rooms.length,
-      ' | roomIds =',
-      rooms.map((r) => r.id),
-    );
-
-    return rooms;
+    return this.roomModel.find({ participants: uid }).sort({ updatedAt: -1 });
   }
 
-  /** GET MESSAGES */
   async getMessages(roomId: string, limit = 50) {
-    const rid = String(roomId);
-    console.log('[ChatService][getMessages] roomId =', rid, ', limit =', limit);
-
     const data = await this.messageModel
-      .find({ roomId: rid })
+      .find({ roomId: String(roomId) })
       .sort({ createdAt: 1 })
       .limit(limit);
 
-    console.log('[ChatService][getMessages] raw count =', data.length);
-
-    const mapped = data.map((m: any) => {
+    return data.map((m: any) => {
       const obj = m.toObject();
-      const converted = {
-        ...obj,
-        senderId: String(obj.senderId),
-        roomId: String(obj.roomId),
-      };
-      return converted;
+      return { ...obj, senderId: String(obj.senderId), roomId: String(obj.roomId) };
     });
+  }
 
-    console.log(
-      '[ChatService][getMessages] mapped count =',
-      mapped.length,
-      ' | sample =',
-      mapped[0],
+  async getUnreadCount(userId: string): Promise<number> {
+    const uid = String(userId);
+    return this.messageModel.countDocuments({
+      senderId: { $ne: uid },
+      readBy: { $nin: [uid] },
+    });
+  }
+
+  async markRoomAsRead(roomId: string, userId: string): Promise<void> {
+    const uid = String(userId);
+    await this.messageModel.updateMany(
+      { roomId: String(roomId), senderId: { $ne: uid }, readBy: { $nin: [uid] } },
+      { $addToSet: { readBy: uid } },
     );
+  }
 
-    return mapped;
+  async getRoomsWithUnread(userId: string) {
+    const uid = String(userId);
+    const rooms = await this.roomModel.find({ participants: uid }).sort({ updatedAt: -1 });
+
+    return Promise.all(
+      rooms.map(async (room) => {
+        const unread = await this.messageModel.countDocuments({
+          roomId: String(room.id),
+          senderId: { $ne: uid },
+          readBy: { $nin: [uid] },
+        });
+        return { ...room.toObject(), unreadCount: unread };
+      }),
+    );
   }
 }

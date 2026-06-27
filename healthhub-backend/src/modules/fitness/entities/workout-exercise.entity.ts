@@ -19,13 +19,23 @@ export class WorkoutExercise {
   @Column()
   name: string;
 
-  // exercise dạng time-based (ví dụ: plank 30s)
-  @Column({ nullable: true })
-  durationSec: number;
+  @Column({ type: 'int', nullable: true })
+  durationSec: number | null;
 
-  // exercise dạng rep-based (ví dụ: push-up 12 reps)
-  @Column({ nullable: true })
-  reps: number;
+  @Column({ type: 'int', nullable: true })
+  reps: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  sets: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  restSec: number | null;
+
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  gifUrl: string | null;
 
   @Column('int', { default: 0 })
   orderIndex: number;

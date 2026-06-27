@@ -16,7 +16,7 @@ import {
 
 export const ACHIEVEMENT_ICONS: Record<string, any> = {
   // USER
-  NEW_USER: UserPlus,
+  WELCOME: UserPlus,
   FIRST_LOGIN: LogIn,
   COMPLETE_PROFILE: UserCheck,
 

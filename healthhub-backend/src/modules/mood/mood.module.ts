@@ -18,5 +18,6 @@ import { FitnessModule } from '../fitness/fitness.module';
 ],
   controllers: [MoodController],
   providers: [MoodService],
+  exports: [MoodService],
 })
 export class MoodModule {}

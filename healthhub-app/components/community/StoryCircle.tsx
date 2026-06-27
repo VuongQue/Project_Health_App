@@ -10,6 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StoryItem } from "@/src/types/community";
 import { Plus } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import { useColors } from "@/src/theme";
 
 interface Props {
   story: StoryItem;
@@ -20,6 +21,7 @@ interface Props {
 export function StoryCircle({ story, onPress, uploadingStory }: Props) {
   const isYour = story.isYourStory;
   const router = useRouter();
+  const colors = useColors();
 
   return (
     <TouchableOpacity
@@ -28,7 +30,7 @@ export function StoryCircle({ story, onPress, uploadingStory }: Props) {
         if (isYour) onPress();
         else
           router.push({
-            pathname: "/story/[id]",
+            pathname: "/(tabs)/(community)/story/[id]",
             params: { id: story.id },
           });
       }}
@@ -44,7 +46,7 @@ export function StoryCircle({ story, onPress, uploadingStory }: Props) {
           colors={isYour ? ["#64748b", "#94a3b8"] : ["#a855f7", "#ec4899"]}
           style={styles.gradient}
         >
-          <View style={styles.avatarBox}>
+          <View style={[styles.avatarBox, { backgroundColor: colors.bgCard }]}>
             {story.user.avatar ? (
               <Image
                 source={{ uri: story.user.avatar }}
@@ -58,15 +60,15 @@ export function StoryCircle({ story, onPress, uploadingStory }: Props) {
 
         {isYour && (
           <View style={styles.plusWrapper}>
-            <View style={styles.plusCircle}>
+            <View style={[styles.plusCircle, { borderColor: colors.bgPrimary }]}>
               <Plus size={14} color="white" />
             </View>
           </View>
         )}
       </View>
 
-      <Text style={styles.name}>
-        {isYour ? "Your Story" : story.user.name}
+      <Text style={[styles.name, { color: colors.textSecondary }]}>
+        {isYour ? "Story của tôi" : story.user.name}
       </Text>
     </TouchableOpacity>
   );
@@ -86,7 +88,6 @@ const styles = StyleSheet.create({
   avatarBox: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#1e293b",
     borderRadius: 999,
     justifyContent: "center",
     alignItems: "center",
@@ -107,9 +108,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: "#0f172a",
   },
-  name: { color: "white", fontSize: 12, marginTop: 6 },
+  name: { fontSize: 11, marginTop: 6, maxWidth: 68, textAlign: "center" },
   loadingCover: {
     position: "absolute",
     width: 68,

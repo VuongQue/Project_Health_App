@@ -3,8 +3,22 @@ import { jwtDecode } from "jwt-decode";
 
 const KEY = "auth_token";
 
+// Simple listeners for token change events
+type TokenListener = (hasToken: boolean) => void;
+const listeners = new Set<TokenListener>();
+
+export const onTokenChange = (cb: TokenListener) => {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+};
+
+const notifyListeners = (hasToken: boolean) => {
+  listeners.forEach((cb) => cb(hasToken));
+};
+
 export const saveToken = async (token: string) => {
   await AsyncStorage.setItem(KEY, token);
+  notifyListeners(true);
 };
 
 export const getToken = async () => {
@@ -13,11 +27,11 @@ export const getToken = async () => {
 
 export const clearToken = async () => {
   await AsyncStorage.removeItem(KEY);
+  notifyListeners(false);
 };
 
 export const getUserFromToken = async () => {
   const token = await AsyncStorage.getItem(KEY);
-  console.log("[TOKEN RAW] =", token);
 
   if (!token) return null;
 
@@ -25,31 +39,22 @@ export const getUserFromToken = async () => {
     const parsed = token.startsWith('"') ? JSON.parse(token) : token;
     const payload: any = jwtDecode(parsed);
 
-    // ⛔ CHECK TOKEN EXPIRE
     if (!payload?.exp || payload.exp * 1000 < Date.now()) {
-      console.log("[token] ❌ expired → clear storage");
       await clearToken();
       return null;
     }
 
     const userId = payload.sub || payload.userId || payload.id;
 
-    if (!userId) {
-      console.log("[token] ❌ no userId in payload");
-      await clearToken();
-      return null;
-    }
-
-    console.log("[token] ✅ valid user:", userId);
+    if (!userId) return null;
 
     return {
       id: userId,
       email: payload.email,
       raw: payload,
     };
-  } catch (err) {
-    console.log("[token] ❌ decode failed:", err);
-    await clearToken();
+  } catch {
+    // Decode failed — do NOT clear token, may be a transient read error
     return null;
   }
 };

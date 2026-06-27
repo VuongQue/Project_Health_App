@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { FitnessService } from './fitness.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AdminOnly } from '../../admin/admin-only.decorator';
 
 import { CreateWorkoutDto } from './dto/create-workout.dto';
 import { CreateWorkoutLogDto } from './dto/create-workout-log.dto';
@@ -137,6 +138,21 @@ export class FitnessController {
     return this.fitnessService.getSessionDetail(req.user, sessionId);
   }
 
+  // HEATMAP
+  @UseGuards(JwtAuthGuard)
+  @Get('heatmap')
+  heatmap(@Req() req, @Query('days') days: string) {
+    return this.fitnessService.getHeatmap(req.user, Number(days) || 90);
+  }
+
+  // LONG-TERM CHART
+  @UseGuards(JwtAuthGuard)
+  @Get('stats/long-term')
+  longTerm(@Req() req, @Query('months') months: string) {
+    return this.fitnessService.getLongTermStats(req.user, Number(months) || 6);
+  }
+
+  @AdminOnly()
   @Get('admin/reindex')
   reindex() {
     return this.fitnessService.reindexAllWorkouts();

@@ -43,7 +43,7 @@ export default function ChallengeDetailScreen() {
       await challengeApi.join(Number(id));
       await load();
     } catch (e: any) {
-      Alert.alert("Error", e?.response?.data?.message ?? "Join failed");
+      Alert.alert("Lỗi", e?.response?.data?.message ?? "Không thể tham gia thử thách");
     }
   };
 
@@ -51,12 +51,12 @@ export default function ChallengeDetailScreen() {
     if (!data?.userChallenge?.id) return;
 
     Alert.alert(
-      "Leave Challenge",
-      "Are you sure you want to leave this challenge?",
+      "Rời thử thách",
+      "Bạn có chắc muốn rời thử thách này không?",
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Huỷ", style: "cancel" },
         {
-          text: "Leave",
+          text: "Rời",
           style: "destructive",
           onPress: async () => {
             await challengeApi.leave(data.userChallenge.id);

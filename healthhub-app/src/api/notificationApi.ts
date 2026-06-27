@@ -15,6 +15,9 @@ function unwrapArray<T>(res: any): T[] {
   // Case 3: backend trả { success, data: [] }
   if (Array.isArray(res?.data?.data)) return res.data.data;
 
+  // Case 4: backend trả { items: [], total, page, limit }
+  if (Array.isArray(res?.items)) return res.items;
+
   return [];
 }
 

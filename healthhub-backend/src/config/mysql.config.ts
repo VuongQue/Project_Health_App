@@ -6,7 +6,8 @@ export const mysqlConfig: TypeOrmModuleOptions = {
   port: Number(process.env.MYSQL_PORT) || 3308,
   username: process.env.MYSQL_USER || 'root',
   password: process.env.MYSQL_PASSWORD || '123456',
-  database: process.env.MYSQL_DB || 'healthhub',
+  database: process.env.MYSQL_DATABASE || process.env.MYSQL_DB || 'healthhub',
   autoLoadEntities: true,
-  synchronize: true, 
+  synchronize: true,
+  timezone: 'Z',
 };

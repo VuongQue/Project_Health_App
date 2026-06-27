@@ -6,19 +6,15 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 @Controller('profile')
 @UseGuards(JwtAuthGuard)
 export class ProfileController {
-  constructor(private readonly profileService: ProfileService) {
-    console.log('🔥 ProfileController LOADED');
-  }
+  constructor(private readonly profileService: ProfileService) {}
 
   @Get('me')
-  async getMe(@Req() req) {
-    console.log('👉 GET /profile/me called, req.user =', req.user);
+  getMe(@Req() req) {
     return this.profileService.getMyProfile(req.user.userId);
   }
 
   @Put('me')
-  async updateMe(@Req() req, @Body() dto: UpdateProfileDto) {
-    console.log('👉 PUT /profile/me called, dto =', dto, 'user =', req.user);
+  updateMe(@Req() req, @Body() dto: UpdateProfileDto) {
     return this.profileService.updateMyProfile(req.user.userId, dto);
   }
 }

@@ -1,55 +1,75 @@
 import { useEffect, useState } from "react";
-import { getPosts, hidePost, deletePost } from "../api/admin.api";
+import { adminPostsApi } from "../api/admin.api";
+import type { CommunityPost } from "../api/admin.api";
+
 
 export default function PostsPage() {
-  const [posts, setPosts] = useState<any[]>([]);
+  const [items, setItems] = useState<CommunityPost[]>([]);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [total, setTotal] = useState(0);
 
-  const load = async () => {
-    const res = await getPosts({ page: 1, limit: 20 });
-    setPosts(res.data.items);
+  const load = async (p = page) => {
+    const res = await adminPostsApi.list({ page: p, limit });
+    setItems(res.data.items);
+    setTotal(res.data.total);
+    setPage(res.data.page);
   };
 
   useEffect(() => {
-    load();
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const totalPages = Math.ceil(total / limit);
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4">Community Posts</h2>
+      <h2 className="text-xl font-bold mb-4">Bài đăng cộng đồng</h2>
 
       <table className="w-full bg-white shadow rounded">
         <thead>
           <tr className="border-b text-left">
-            <th className="p-2">Content</th>
-            <th className="p-2">User</th>
-            <th className="p-2">Actions</th>
+            <th className="p-2">Nội dung</th>
+            <th className="p-2">Người đăng</th>
+            <th className="p-2">Thao tác</th>
           </tr>
         </thead>
 
         <tbody>
-          {posts.map((p) => (
+          {items.map((p) => (
             <tr key={p._id} className="border-b">
               <td className="p-2 truncate max-w-md">{p.content}</td>
-              <td className="p-2">{p.user?.name}</td>
+              <td className="p-2">{p.user?.name || p.user?.fullName || p.user?.email}</td>
               <td className="p-2 space-x-2">
-                <button
-                  className="text-yellow-600"
-                  onClick={() => hidePost(p._id).then(load)}
-                >
-                  Hide
-                </button>
+                {p.isHidden ? (
+                  <button className="text-green-600" onClick={() => adminPostsApi.unhide(p._id).then(() => load())}>
+                    Bỏ ẩn
+                  </button>
+                ) : (
+                  <button className="text-yellow-600" onClick={() => adminPostsApi.hide(p._id).then(() => load())}>
+                    Ẩn bài
+                  </button>
+                )}
 
-                <button
-                  className="text-red-500"
-                  onClick={() => deletePost(p._id).then(load)}
-                >
-                  Delete
+                <button className="text-red-500" onClick={() => adminPostsApi.remove(p._id).then(() => load())}>
+                  Xoá
                 </button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      <div className="mt-4 flex items-center gap-2">
+        <button className="border rounded px-3 py-1 disabled:opacity-50" disabled={page <= 1} onClick={() => load(page - 1)}>
+          Trước
+        </button>
+        <span className="text-sm text-gray-600">Trang {page} / {totalPages || 1}</span>
+        <button className="border rounded px-3 py-1 disabled:opacity-50" disabled={page >= totalPages} onClick={() => load(page + 1)}>
+          Tiếp
+        </button>
+      </div>
     </div>
   );
 }

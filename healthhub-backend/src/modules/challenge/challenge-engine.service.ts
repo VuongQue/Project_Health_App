@@ -86,28 +86,22 @@ export class ChallengeEngineService {
       }
 
       // complete
-      if (uc.completedCount >= uc.challenge.targetCount) {
+      if (uc.completedCount >= uc.challenge.targetCount && uc.status !== 'completed') {
         uc.status = 'completed';
 
         await this.notiService.createForUserId(
           userId,
           NotificationType.CHALLENGE,
-          `Bạn đã hoàn thành thử thách "${uc.challenge.name}"!`,
+          `🏆 Bạn đã hoàn thành thử thách "${uc.challenge.name}"!`,
         );
 
-        // achievement ví dụ: FIRST_CHALLENGE
+        // Evaluate EVERY time a challenge is completed (not just first)
         const completedCount = await this.ucRepo.count({
           where: { user: { id: userId }, status: 'completed' },
         });
-        if (completedCount === 1) {
-          const user = await this.usersService.getUserById(userId);
-          if (user) {
-          await this.achEngine.evaluate(userId, 'CHALLENGE_COMPLETED', {
+        await this.achEngine.evaluate(userId, 'CHALLENGE_COMPLETED', {
           challengeCompletedCount: completedCount,
         });
-
-        }
-        }
       }
 
       await this.ucRepo.save(uc);

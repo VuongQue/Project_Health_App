@@ -13,16 +13,17 @@ import {
 } from "react-native";
 import { ArrowLeft, Heart, MessageSquare, Share2 } from "lucide-react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-
 import { communityApi } from "@/src/api/communityApi";
 import { PostItem } from "@/src/types/community";
 import { PostComments } from "@/components/community/PostComments";
+import { useColors, Spacing, Radius, sf } from "@/src/theme";
 
 const { width } = Dimensions.get("window");
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const colors = useColors();
 
   const [post, setPost] = useState<PostItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,9 +43,7 @@ export default function PostDetailScreen() {
     }
   };
 
-  useEffect(() => {
-    loadPost();
-  }, [id]);
+  useEffect(() => { loadPost(); }, [id]);
 
   const handleLike = async () => {
     if (!post || liking) return;
@@ -57,39 +56,35 @@ export default function PostDetailScreen() {
     }
   };
 
-  const onScrollEnd = (
-    e: NativeSyntheticEvent<NativeScrollEvent>
-  ) => {
-    const index = Math.round(
-      e.nativeEvent.contentOffset.x / width
-    );
+  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / width);
     setActiveIndex(index);
   };
 
   if (loading || !post) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator color="#60a5fa" />
+      <View style={[styles.loading, { backgroundColor: colors.bgSecondary }]}>
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
   const avatarUrl =
     post.userId?.avatar ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      post.userId?.name ?? "User"
-    )}`;
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(post.userId?.name ?? "User")}`;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.bgSecondary }]}>
       {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft color="white" />
+      <View style={[styles.header, { backgroundColor: colors.bgPrimary, borderBottomColor: colors.border }]}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { backgroundColor: colors.bgCardElevated, borderColor: colors.border }]}
+        >
+          <ArrowLeft size={20} color={colors.textPrimary} />
         </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Post</Text>
-        <View style={{ width: 24 }} />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Bài viết</Text>
+        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView>
@@ -97,8 +92,8 @@ export default function PostDetailScreen() {
         <View style={styles.authorRow}>
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           <View>
-            <Text style={styles.author}>{post.userId?.name}</Text>
-            <Text style={styles.time}>
+            <Text style={[styles.author, { color: colors.textPrimary }]}>{post.userId?.name}</Text>
+            <Text style={[styles.time, { color: colors.textMuted }]}>
               {new Date(post.createdAt).toDateString()}
             </Text>
           </View>
@@ -106,10 +101,10 @@ export default function PostDetailScreen() {
 
         {/* CONTENT */}
         {post.content && (
-          <Text style={styles.content}>{post.content}</Text>
+          <Text style={[styles.content, { color: colors.textPrimary }]}>{post.content}</Text>
         )}
 
-        {/* MEDIA – STACK SLIDER */}
+        {/* MEDIA SLIDER */}
         {post.media?.length > 0 && (
           <View style={styles.sliderWrapper}>
             <ScrollView
@@ -120,22 +115,18 @@ export default function PostDetailScreen() {
             >
               {post.media.map((uri, index) => (
                 <View key={index} style={styles.slide}>
-                  <Image
-                    source={{ uri }}
-                    style={styles.slideImage}
-                  />
+                  <Image source={{ uri }} style={styles.slideImage} />
                 </View>
               ))}
             </ScrollView>
-
-            {/* DOT INDICATOR */}
             <View style={styles.dots}>
               {post.media.map((_, i) => (
                 <View
                   key={i}
                   style={[
                     styles.dot,
-                    i === activeIndex && styles.dotActive,
+                    { backgroundColor: colors.border },
+                    i === activeIndex && { backgroundColor: colors.primary },
                   ]}
                 />
               ))}
@@ -144,154 +135,76 @@ export default function PostDetailScreen() {
         )}
 
         {/* ACTIONS */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={handleLike}
-          >
-            <Heart size={20} color="#94a3b8" />
-            <Text style={styles.actionText}>
-              {post.likeCount}
-            </Text>
+        <View style={[styles.actions, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
+            <Heart size={20} color={colors.textMuted} />
+            <Text style={[styles.actionText, { color: colors.textMuted }]}>{post.likeCount}</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => setShowComments(!showComments)}
-          >
-            <MessageSquare size={20} color="#94a3b8" />
-            <Text style={styles.actionText}>
-              {post.commentCount}
-            </Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setShowComments(!showComments)}>
+            <MessageSquare size={20} color={colors.textMuted} />
+            <Text style={[styles.actionText, { color: colors.textMuted }]}>{post.commentCount}</Text>
           </TouchableOpacity>
-
-          <Share2 size={20} color="#94a3b8" />
+          <Share2 size={20} color={colors.textMuted} />
         </View>
 
         {/* COMMENTS */}
-        {showComments && (
-          <PostComments postId={post._id} />
-        )}
+        {showComments && <PostComments postId={post._id} />}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
+  container: { flex: 1 },
+  loading: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  loading: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-
-  /* HEADER */
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 16,
+    paddingHorizontal: Spacing.base,
+    paddingTop: 52,
+    paddingBottom: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: "#334155",
   },
-
-  headerTitle: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
+  backBtn: {
+    width: 38, height: 38,
+    borderRadius: Radius.md,
+    justifyContent: "center", alignItems: "center",
+    borderWidth: 1,
   },
+  headerTitle: { fontSize: sf(17), fontWeight: "700" },
 
-  /* AUTHOR */
   authorRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    padding: Spacing.base,
     gap: 12,
   },
+  avatar: { width: 48, height: 48, borderRadius: 999 },
+  author: { fontWeight: "600", fontSize: sf(15) },
+  time: { fontSize: sf(12), marginTop: 2 },
 
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 999,
-  },
-
-  author: {
-    color: "white",
-    fontWeight: "600",
-    fontSize: 16,
-  },
-
-  time: {
-    color: "#94a3b8",
-    fontSize: 12,
-  },
-
-  /* CONTENT */
   content: {
-    color: "white",
-    fontSize: 16,
+    fontSize: sf(16),
     lineHeight: 22,
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: Spacing.base,
+    marginBottom: Spacing.md,
   },
 
-  /* SLIDER */
-  sliderWrapper: {
-    marginVertical: 8,
-  },
+  sliderWrapper: { marginVertical: 8 },
+  slide: { width, alignItems: "center" },
+  slideImage: { width: width - 32, height: width - 32, borderRadius: Radius.xl },
+  dots: { flexDirection: "row", justifyContent: "center", marginTop: 8, gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: 99 },
 
-  slide: {
-    width: width,
-    alignItems: "center",
-  },
-
-  slideImage: {
-    width: width - 32,
-    height: width - 32,
-    borderRadius: 20,
-  },
-
-  dots: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 8,
-    gap: 6,
-  },
-
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 99,
-    backgroundColor: "#334155",
-  },
-
-  dotActive: {
-    backgroundColor: "#60a5fa",
-  },
-
-  /* ACTIONS */
   actions: {
     flexDirection: "row",
     gap: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: "#334155",
   },
-
-  actionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-
-  actionText: {
-    color: "#94a3b8",
-    fontSize: 14,
-  },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
+  actionText: { fontSize: sf(14) },
 });

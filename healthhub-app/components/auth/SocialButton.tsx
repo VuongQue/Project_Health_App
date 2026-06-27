@@ -1,5 +1,6 @@
 import React from "react";
 import { TouchableOpacity, Text, StyleSheet } from "react-native";
+import { useColors, Radius, sw, sf } from "@/src/theme";
 
 interface SocialButtonProps {
   provider: "google" | "facebook" | "apple";
@@ -7,18 +8,24 @@ interface SocialButtonProps {
 }
 
 export function SocialButton({ provider, onPress }: SocialButtonProps) {
-  const icons: Record<string, string> = {
-    google: "🟦",
-    facebook: "📘",
-    apple: "",
+  const colors = useColors();
+
+  const PROVIDERS: Record<string, { icon: string; label: string; iconColor: string }> = {
+    google:   { icon: "G", label: "Google",   iconColor: "#4285f4" },
+    facebook: { icon: "f", label: "Facebook", iconColor: "#1877f2" },
+    apple:    { icon: "",  label: "Apple",    iconColor: colors.textPrimary },
   };
 
-  const label = provider.charAt(0).toUpperCase() + provider.slice(1);
+  const p = PROVIDERS[provider];
 
   return (
-    <TouchableOpacity style={styles.button} onPress={onPress}>
-      <Text style={styles.icon}>{icons[provider]}</Text>
-      <Text style={styles.text}>{label}</Text>
+    <TouchableOpacity
+      style={[styles.button, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Text style={[styles.icon, { color: p.iconColor }]}>{p.icon}</Text>
+      <Text style={[styles.text, { color: colors.textSecondary }]}>{p.label}</Text>
     </TouchableOpacity>
   );
 }
@@ -27,21 +34,19 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#1e293b",
     borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: Radius.lg,
+    paddingVertical: sw(12),
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: sw(6),
   },
   icon: {
-    fontSize: 16,
-    color: "white",
+    fontSize: sf(16),
+    fontWeight: "800",
   },
   text: {
-    color: "white",
-    fontSize: 14,
+    fontSize: sf(14),
+    fontWeight: "600",
   },
 });

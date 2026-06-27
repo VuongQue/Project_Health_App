@@ -1,8 +1,11 @@
 import axios from "axios";
 import { getToken } from "../utils/tokenStorage";
+import { API_BASE_URL } from "../config/env";
+
+export { API_BASE_URL };
 
 const axiosClient = axios.create({
-  baseURL: "http://192.168.110.205:4000",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
     "Accept": "application/json",     
@@ -11,10 +14,13 @@ const axiosClient = axios.create({
 });
 
 axiosClient.interceptors.request.use(async (config) => {
-
-
   if (config.url?.startsWith("/auth")) {
     return config;
+  }
+
+  // AI endpoints cần thêm thời gian vì Gemini xử lý lâu
+  if (config.url?.startsWith("/ai")) {
+    config.timeout = 60000;
   }
 
   const token = await getToken();
@@ -25,10 +31,7 @@ axiosClient.interceptors.request.use(async (config) => {
 
 axiosClient.interceptors.response.use(
   (res) => res,
-  (err) => {
-    console.log("❌ API Error:", err.response?.status, err.response?.data);
-    return Promise.reject(err);
-  }
+  (err) => Promise.reject(err)
 );
 
 export default axiosClient;

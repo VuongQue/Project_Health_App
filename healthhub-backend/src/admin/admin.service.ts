@@ -145,6 +145,14 @@ export class AdminService {
     return this.communityService.adminDeletePost(id);
   }
 
+  async listReports(page: number, limit: number, status?: string) {
+    return this.communityService.getAdminReports(page, limit, status);
+  }
+
+  async resolveReport(reportId: string, action: 'warn' | 'hide' | 'dismiss', adminNote?: string) {
+    return this.communityService.resolveReport(reportId, action, adminNote);
+  }
+
   // -----------------------
   // ACHIEVEMENTS / CHALLENGES
   // -----------------------

@@ -61,4 +61,26 @@ export const friendApi = {
     const res = await axiosClient.post(`/friends/unfriend/${targetId}`);
     return res.data;
   },
+
+  // ============================
+  // LEADERBOARD (points)
+  // ============================
+  getLeaderboard: async () => {
+    const res = await axiosClient.get("/friends/leaderboard");
+    return res.data as {
+      rank: number; id: number; fullName: string; avatarUrl: string | null;
+      level: number; points: number; isMe: boolean;
+    }[];
+  },
+
+  // ============================
+  // STEPS LEADERBOARD (today)
+  // ============================
+  getStepsLeaderboard: async () => {
+    const res = await axiosClient.get("/friends/leaderboard/steps");
+    return res.data as {
+      rank: number; id: number; fullName: string; avatarUrl: string | null;
+      level: number; todaySteps: number; goalSteps: number; isMe: boolean;
+    }[];
+  },
 };

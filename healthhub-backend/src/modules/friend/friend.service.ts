@@ -8,6 +8,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { FriendRequest } from "./entities/friend-request.entity";
 import { Friend } from "./entities/friend.entity";
+import { DailySteps } from "../steps/entities/daily-steps.entity";
 import { UsersService } from "../users/users.service";
 
 // 🔥 Kafka
@@ -23,6 +24,9 @@ export class FriendService {
 
     @InjectRepository(Friend)
     private readonly friendRepo: Repository<Friend>,
+
+    @InjectRepository(DailySteps)
+    private readonly stepsRepo: Repository<DailySteps>,
 
     private readonly usersService: UsersService,
 
@@ -182,14 +186,78 @@ export class FriendService {
   // SUGGEST FRIENDS
   // ============================
   async suggestFriends(userId: number) {
+  const friends = await this.friendRepo.find({ where: { userId } });
+
+  const friendIds = friends.map((f) => f.friendId);
+  const excludeIds = [userId, ...friendIds];
+
+  return this.usersService.getUsersExclude(excludeIds, {
+    excludeRoles: ["ADMIN"],
+  });
+}
+
+
+  // ============================
+  // LEADERBOARD (friends ranked by points)
+  // ============================
+  async getLeaderboard(userId: number) {
     const friends = await this.friendRepo.find({
       where: { userId },
+      relations: ['friend'],
     });
 
-    const friendIds = friends.map((f) => f.friendId);
-    const excludeIds = [userId, ...friendIds];
+    const me = await this.usersService.getUserById(userId);
+    const friendUsers = friends.map((f) => f.friend);
+    const all = [{ ...me, isMe: true }, ...friendUsers.map((u) => ({ ...u, isMe: false }))];
 
-    return this.usersService.getUsersExclude(excludeIds);
+    all.sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+
+    return all.map((u, i) => ({
+      rank: i + 1,
+      id: u.id,
+      fullName: u.fullName,
+      avatarUrl: (u as any).avatarUrl,
+      level: u.level,
+      points: u.points,
+      isMe: (u as any).isMe ?? false,
+    }));
+  }
+
+  // ============================
+  // STEPS LEADERBOARD (today)
+  // ============================
+  async getStepsLeaderboard(userId: number) {
+    const friends = await this.friendRepo.find({
+      where: { userId },
+      relations: ['friend'],
+    });
+
+    const me = await this.usersService.getUserById(userId);
+    const friendUsers = friends.map((f) => f.friend);
+    const allUsers = [{ ...(me as any), isMe: true }, ...friendUsers.map((u) => ({ ...u, isMe: false }))];
+    const allIds = allUsers.map((u) => u.id);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const stepsRecords = await this.stepsRepo.find({
+      where: allIds.map((id) => ({ userId: id, date: today })),
+    });
+    const stepsMap = new Map(stepsRecords.map((r) => [r.userId, r]));
+
+    const ranked = allUsers.map((u) => {
+      const r = stepsMap.get(u.id);
+      return {
+        id: u.id,
+        fullName: u.fullName,
+        avatarUrl: u.avatarUrl ?? null,
+        level: u.level ?? 1,
+        todaySteps: r?.steps ?? 0,
+        goalSteps: r?.goalSteps ?? 10000,
+        isMe: u.isMe,
+      };
+    });
+
+    ranked.sort((a, b) => b.todaySteps - a.todaySteps);
+    return ranked.map((u, i) => ({ rank: i + 1, ...u }));
   }
 
   // ============================

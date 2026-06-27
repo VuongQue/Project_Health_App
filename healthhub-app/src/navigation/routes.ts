@@ -8,7 +8,9 @@ export const routes = {
   community: {
     feed: "(tabs)/(community)/feed",
     friends: "(tabs)/(community)/friends",
-    alerts: "(tabs)/(community)/alerts",
+    groups: "(tabs)/(community)/groups",
+    events: "(tabs)/(community)/events",
+    explore: "(tabs)/(community)/explore",
     profile: "(tabs)/profile",
   }
 };

@@ -73,6 +73,27 @@ export class FitnessService {
   // WORKOUT LIST + FILTER (ELASTICSEARCH + fallback DB)
   // ======================================================
   async findAllWorkouts(filter?: WorkoutFilterDto) {
+    // When search keyword is present, delegate to WorkoutSearchService (LIKE-based)
+    if (filter?.search) {
+      const ids = await this.workoutSearch.searchWorkouts({
+        search: filter.search,
+        muscleGroup: filter.muscleGroup,
+        level: filter.level,
+        minKcal: filter.minKcal ? Number(filter.minKcal) : undefined,
+      });
+
+      if (ids.length === 0) return [];
+
+      const workouts = await this.workoutRepo.find({
+        where: { id: In(ids) },
+        relations: ['exercises'],
+      });
+
+      // Preserve relevance order returned by searchWorkouts
+      const idOrder = new Map(ids.map((id, i) => [id, i]));
+      return workouts.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
+    }
+
     const where: any = {};
 
     if (filter?.category) {
@@ -282,12 +303,13 @@ export class FitnessService {
     };
 
     for (const log of logs) {
+      if (!log.workout?.muscleGroup) continue;
       const mg = log.workout.muscleGroup.toLowerCase();
 
-      if (['cardio', 'hiit'].includes(mg)) result.cardio.sessions++;
-      if (['strength', 'upper', 'lower', 'legs', 'chest', 'back'].includes(mg))
+      if (['cardio', 'hiit', 'full_body'].includes(mg)) result.cardio.sessions++;
+      if (['strength', 'upper', 'lower', 'upper_body', 'lower_body', 'core'].includes(mg))
         result.strength.sessions++;
-      if (['flexibility', 'stretch', 'yoga'].includes(mg)) result.flex.sessions++;
+      if (['flexibility', 'stretch', 'yoga', 'full_body'].includes(mg)) result.flex.sessions++;
     }
 
     for (const key of Object.keys(result)) {
@@ -313,6 +335,76 @@ export class FitnessService {
       totalKcal: logs.reduce((t, x) => t + x.kcal, 0),
       totalMinutes: logs.reduce((t, x) => t + x.durationMin, 0),
     };
+  }
+
+  // ======================================================
+  // HEATMAP (last N days of workout activity)
+  // ======================================================
+  async getHeatmap(user: User, days = 90) {
+    const end = new Date();
+    const start = subDays(end, days - 1);
+
+    const logs = await this.logRepo.find({
+      where: {
+        user: { id: user.id },
+        startedAt: Between(startOfDay(start), end),
+      },
+      select: { startedAt: true, kcal: true, durationMin: true },
+    });
+
+    const map: Record<string, { count: number; kcal: number; minutes: number }> = {};
+    for (let i = 0; i < days; i++) {
+      const d = subDays(end, i).toISOString().slice(0, 10);
+      map[d] = { count: 0, kcal: 0, minutes: 0 };
+    }
+    for (const log of logs) {
+      const d = new Date(log.startedAt).toISOString().slice(0, 10);
+      if (map[d]) {
+        map[d].count++;
+        map[d].kcal += log.kcal ?? 0;
+        map[d].minutes += log.durationMin ?? 0;
+      }
+    }
+
+    return Object.entries(map)
+      .map(([date, v]) => ({ date, ...v }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  // ======================================================
+  // LONG-TERM CHART (monthly kcal burned over past months)
+  // ======================================================
+  async getLongTermStats(user: User, months = 6) {
+    const end = new Date();
+    const start = subDays(end, months * 30);
+
+    const logs = await this.logRepo.find({
+      where: {
+        user: { id: user.id },
+        startedAt: Between(startOfDay(start), end),
+      },
+      select: { startedAt: true, kcal: true, durationMin: true },
+    });
+
+    const map: Record<string, { kcal: number; sessions: number; minutes: number }> = {};
+    for (let i = 0; i < months; i++) {
+      const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      map[key] = { kcal: 0, sessions: 0, minutes: 0 };
+    }
+    for (const log of logs) {
+      const d = new Date(log.startedAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (map[key]) {
+        map[key].kcal += log.kcal ?? 0;
+        map[key].sessions++;
+        map[key].minutes += log.durationMin ?? 0;
+      }
+    }
+
+    return Object.entries(map)
+      .map(([month, v]) => ({ month, ...v }))
+      .sort((a, b) => a.month.localeCompare(b.month));
   }
 
   // ======================================================
@@ -373,8 +465,6 @@ export class FitnessService {
   }
 
   async startSession(jwtUser: any, workoutId: number) {
-    console.log('🔥 StartSession jwtUser =', jwtUser);
-
     const user = await this.usersService.findByEmail(jwtUser.email);
     if (!user) throw new NotFoundException('User not found');
 
@@ -433,9 +523,11 @@ export class FitnessService {
     session.completed = true;
     await this.sessionRepo.save(session);
 
-    // 2️⃣ Tạo log
-    const durationMin = Math.max(1, Math.floor(dto.seconds / 60));
-    const kcal = dto.calories;
+    // 2️⃣ Tạo log — clamp inputs to sane range
+    const rawSeconds  = typeof dto.seconds  === 'number' ? dto.seconds  : 0;
+    const rawCalories = typeof dto.calories === 'number' ? dto.calories : 0;
+    const durationMin = Math.max(1, Math.min(Math.floor(rawSeconds / 60), 600)); // max 10h
+    const kcal        = Math.max(0, Math.min(rawCalories, 9999));                // max 9999 kcal
 
     const log = this.logRepo.create({
       user,
@@ -515,11 +607,8 @@ export class FitnessService {
         },
       });
 
-      console.log(
-        `[WORKOUT][CHALLENGE] progress updated for userId=${user.id}`,
-      );
     } catch (err) {
-      console.error('[WORKOUT][CHALLENGE] engine failed', err);
+      // challenge engine errors are non-critical
     }
 
     return { session, log };
@@ -560,7 +649,7 @@ export class FitnessService {
 
     while (days.has(current)) {
       streak++;
-      current = startOfDay(subDays(current, 1)).getTime();
+      current = startOfDay(subDays(new Date(current), 1)).getTime();
     }
 
     return streak;

@@ -1,16 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ElasticsearchModule as ESModule } from '@nestjs/elasticsearch';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { WorkoutSearchService } from './workout-search.service';
+import { Workout } from '../fitness/entities/workout.entity';
 
 @Module({
-  imports: [
-    ESModule.register({
-      node: 'http://localhost:9200',
-      maxRetries: 3,
-      requestTimeout: 30000,
-    }),
-  ],
+  imports: [TypeOrmModule.forFeature([Workout])],
   providers: [WorkoutSearchService],
-  exports: [WorkoutSearchService],  
+  exports: [WorkoutSearchService],
 })
 export class ElasticsearchModule {}

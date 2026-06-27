@@ -6,95 +6,75 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
+import { Logger, UseGuards } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { SendMessageDto } from './dto/send-message.dto';
 
-@WebSocketGateway({
-  cors: { origin: '*' },
-})
+@WebSocketGateway({ cors: { origin: '*' } })
 @UseGuards(WsJwtGuard)
 export class ChatGateway {
   @WebSocketServer()
   server: Server;
 
+  private readonly logger = new Logger(ChatGateway.name);
+
   constructor(private chatService: ChatService) {}
 
   handleConnection(client: Socket) {
     const user: any = (client as any).user;
-    console.log('===========================');
-    console.log('[WS][handleConnection] client.id =', client.id);
-    console.log('[WS][handleConnection] user payload =', user);
-    console.log('===========================');
+    this.logger.debug(`Client connected: ${client.id} | userId=${user?.userId ?? 'unknown'}`);
   }
 
   handleDisconnect(client: Socket) {
-    console.log('[WS][handleDisconnect] client.id =', client.id);
+    this.logger.debug(`Client disconnected: ${client.id}`);
   }
 
-  /** JOIN ROOM */
   @SubscribeMessage('joinRoom')
   async handleJoinRoom(
     @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    console.log('---------------------------');
-    console.log('[WS][joinRoom] raw payload =', data);
     const roomId = String(data.roomId);
-    console.log('[WS][joinRoom] client.id =', client.id);
-    console.log('[WS][joinRoom] roomId =', roomId);
-
     client.join(roomId);
-
-    // log danh sách room của client sau khi join
-    console.log('[WS][joinRoom] client.rooms =', Array.from(client.rooms));
-    console.log('---------------------------');
+    this.logger.debug(`Client ${client.id} joined room ${roomId}`);
   }
 
-  /** SEND MESSAGE (REALTIME) */
+  @SubscribeMessage('typing')
+  handleTyping(
+    @MessageBody() data: { roomId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user: any = (client as any).user;
+    const userId = String(user?.userId ?? user?.id ?? user?.sub ?? '');
+    const roomId = String(data.roomId);
+    client.to(roomId).emit('typing', { userId, roomId });
+  }
+
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
     @MessageBody() dto: SendMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
-    console.log('***************************');
-    console.log('[WS][sendMessage] dto =', dto);
-
     const user: any = (client as any).user;
-    console.log('[WS][sendMessage] socket user payload =', user);
-
     const senderId = String(user?.userId ?? user?.id ?? user?.sub ?? '');
-    console.log('[WS][sendMessage] resolved senderId =', senderId);
 
     if (!senderId) {
-      console.error('[WS][sendMessage] ❌ MISSING senderId -> abort emit');
-      console.log('***************************');
+      this.logger.warn(`sendMessage aborted: no senderId (client ${client.id})`);
       return;
     }
 
     try {
       const msg = await this.chatService.sendMessage(senderId, dto);
-      console.log('[WS][sendMessage] message from service =', msg);
-
       const safeMsg = {
         ...msg,
         senderId: String(msg.senderId),
         roomId: String(msg.roomId),
       };
-
-      console.log(
-        '[WS][sendMessage] broadcasting to room =',
-        safeMsg.roomId,
-        ' | sender =',
-        safeMsg.senderId,
-      );
-
       this.server.to(safeMsg.roomId).emit('message', safeMsg);
-    } catch (err) {
-      console.error('[WS][sendMessage] ❌ Error =', err);
+      this.logger.debug(`Message sent to room ${safeMsg.roomId} by user ${senderId}`);
+    } catch (err: any) {
+      this.logger.error(`sendMessage error: ${err?.message}`, err?.stack);
     }
-
-    console.log('***************************');
   }
 }

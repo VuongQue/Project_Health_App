@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not, ILike } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -6,6 +6,8 @@ import { AchievementEngine } from '../achievement/achievement.engine';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private usersRepo: Repository<User>,
@@ -59,25 +61,33 @@ export class UsersService {
     };
   }
 
-  async getUsersExclude(ids: number[]) {
-    console.log("[UsersService][getUsersExclude] exclude ids =", ids);
-    const users = await this.usersRepo.find({
-      where: { id: Not(In(ids)) },
-    });
-    console.log("[UsersService][getUsersExclude] result count =", users.length);
-    return users;
+  async getUserFullById(id: string | number): Promise<User> {
+    const user = await this.usersRepo.findOne({ where: { id: Number(id) } });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async getUsersExclude(
+    ids: number[],
+    opts?: { excludeRoles?: string[] },
+  ) {
+    const qb = this.usersRepo.createQueryBuilder("u")
+      .where("u.id NOT IN (:...ids)", { ids });
+
+    if (opts?.excludeRoles?.length) {
+      qb.andWhere("u.role NOT IN (:...roles)", { roles: opts.excludeRoles });
+    }
+
+    return qb.getMany();
   }
 
   async searchUsers(keyword: string) {
-    console.log("[UsersService][searchUsers] keyword =", keyword);
-    const users = await this.usersRepo.find({
+    return this.usersRepo.find({
       where: [
         { fullName: ILike(`%${keyword}%`) },
         { email: ILike(`%${keyword}%`) },
       ],
     });
-    console.log("[UsersService][searchUsers] result count =", users.length);
-    return users;
   }
 
   async getProfile(userId: number) {
@@ -97,8 +107,40 @@ export class UsersService {
     });
   }
 
+  async savePushToken(userId: number, token: string) {
+    await this.usersRepo.update(userId, { expoPushToken: token });
+    return { success: true };
+  }
+
+  async getPushToken(userId: number): Promise<string | null> {
+    const user = await this.usersRepo.findOne({ where: { id: userId }, select: { expoPushToken: true } });
+    return user?.expoPushToken ?? null;
+  }
+
+  async addPoints(userId: number, pts: number) {
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (!user) return;
+    user.points = (user.points ?? 0) + pts;
+    // Level thresholds: 1→100, 2→250, 3→500, 4→1000, 5→2000 …
+    const thresholds = [0, 100, 250, 500, 1000, 2000, 4000, 7000, 11000, 16000];
+    let newLevel = 1;
+    for (let i = thresholds.length - 1; i >= 0; i--) {
+      if (user.points >= thresholds[i]) { newLevel = i + 1; break; }
+    }
+    user.level = newLevel;
+    await this.usersRepo.save(user);
+  }
+
   async updateProfile(userId: number, dto: any) {
-  await this.usersRepo.update(userId, dto);
+  // Whitelist fields that users are allowed to update themselves
+  const { fullName, username, avatarUrl, dailyGoal } = dto;
+  const safeDto: Partial<User> = {};
+  if (fullName   !== undefined) safeDto.fullName   = fullName;
+  if (username   !== undefined) safeDto.username   = username;
+  if (avatarUrl  !== undefined) safeDto.avatarUrl  = avatarUrl;
+  if (dailyGoal  !== undefined) safeDto.dailyGoal  = dailyGoal;
+
+  await this.usersRepo.update(userId, safeDto);
 
   const user = await this.usersRepo.findOne({
     where: { id: userId },
@@ -124,7 +166,6 @@ export class UsersService {
 
   return this.getProfile(userId);
 }
-
 
 
 }

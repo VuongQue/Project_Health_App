@@ -1,14 +1,30 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, ActivityIndicator, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  StyleSheet,
+  Alert,
+  ScrollView,
+} from "react-native";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Camera, User } from "lucide-react-native";
+import { ArrowLeft, Camera, User, Check } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 
 import { profileApi } from "@/src/api/profileApi";
 import { UserProfile, UpdateProfileDto } from "@/src/types/profile";
+import { useTranslation } from "react-i18next";
+import { useColors, Radius, Spacing, Typography } from "@/src/theme";
+import { simpleCache } from "@/src/utils/simpleCache";
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const colors = useColors();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -32,40 +48,32 @@ export default function EditProfileScreen() {
     });
 
     if (res.canceled) return;
-
     const picked = res.assets[0];
-
-    // preview local image
     setForm((prev) => ({ ...prev, avatarUrl: picked.uri }));
 
     try {
       setUploading(true);
-
       const uploadUrl = await profileApi.uploadAvatar(picked.uri);
-
-      console.log("Uploaded URL:", uploadUrl);
       updateField("avatarUrl", uploadUrl);
-    } catch (err) {
-      console.log("Upload avatar error:", err);
+    } catch {
+      Alert.alert(t("common.error"), t("profile_edit.err_avatar"));
     } finally {
       setUploading(false);
     }
   };
 
-
   const loadProfile = async () => {
     try {
       const res = await profileApi.getMe();
       const user: UserProfile["user"] = res.data.user;
-
       setForm({
         fullName: user.fullName || "",
         username: user.username || "",
         avatarUrl: user.avatarUrl || "",
         dailyGoal: user.dailyGoal || "",
       });
-    } catch (err) {
-      console.log("Load profile failed:", err);
+    } catch {
+      Alert.alert(t("common.error"), t("profile_edit.err_load"));
     } finally {
       setLoading(false);
     }
@@ -75,9 +83,10 @@ export default function EditProfileScreen() {
     try {
       setSaving(true);
       await profileApi.updateMe(form);
+      simpleCache.delete("profile:me"); // buộc profile screen fetch lại
       router.back();
-    } catch (err) {
-      console.log("Save failed:", err);
+    } catch {
+      Alert.alert(t("common.error"), t("profile_edit.err_save"));
     } finally {
       setSaving(false);
     }
@@ -89,151 +98,162 @@ export default function EditProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+      <View style={[styles.loadingView, { backgroundColor: colors.bgSecondary }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={24} color="white" />
+    <View style={[styles.container, { backgroundColor: colors.bgSecondary }]}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.bgPrimary, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.bgCardElevated, borderColor: colors.border }]}>
+          <ArrowLeft size={20} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
-        <View style={{ width: 24 }} />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t("profile_edit.title")}</Text>
+        <View style={{ width: 38 }} />
       </View>
 
-      {/* AVATAR */}
-      <View style={styles.avatarWrapper}>
-        <TouchableOpacity onPress={pickAvatar}>
-          {form.avatarUrl ? (
-            <Image source={{ uri: form.avatarUrl }} style={styles.avatarImg} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <User size={40} color="white" />
-            </View>
-          )}
-
-          {/* icon camera overlay */}
-          <View style={styles.cameraBtn}>
-            {uploading ? (
-              <ActivityIndicator size="small" color="white" />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Avatar section */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity onPress={pickAvatar} activeOpacity={0.85} style={styles.avatarWrap}>
+            {form.avatarUrl ? (
+              <Image source={{ uri: form.avatarUrl }} style={styles.avatarImg} />
             ) : (
-              <Camera size={18} color="white" />
+              <LinearGradient colors={colors.gradientPrimary} style={styles.avatarPlaceholder}>
+                <User size={44} color="white" />
+              </LinearGradient>
             )}
+            <View style={styles.cameraBtn}>
+              {uploading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Camera size={16} color="white" />
+              )}
+            </View>
+          </TouchableOpacity>
+          <Text style={[styles.avatarHint, { color: colors.textMuted }]}>{t("profile_edit.avatar_hint")}</Text>
+        </View>
+
+        {/* Form */}
+        <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("profile_edit.fullname_label")}</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.bgInput, color: colors.textPrimary, borderColor: colors.border }]}
+              value={form.fullName}
+              onChangeText={(v) => updateField("fullName", v)}
+              placeholderTextColor={colors.textDisabled}
+              placeholder={t("profile_edit.fullname_placeholder")}
+              selectionColor={colors.primary}
+            />
           </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("profile_edit.username_label")}</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.bgInput, color: colors.textPrimary, borderColor: colors.border }]}
+              value={form.username}
+              onChangeText={(v) => updateField("username", v)}
+              placeholderTextColor={colors.textDisabled}
+              placeholder="@username"
+              autoCapitalize="none"
+              selectionColor={colors.primary}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("profile_edit.daily_goal_label")}</Text>
+            <TextInput
+              style={[styles.input, styles.textArea, { backgroundColor: colors.bgInput, color: colors.textPrimary, borderColor: colors.border }]}
+              value={form.dailyGoal}
+              onChangeText={(v) => updateField("dailyGoal", v)}
+              multiline
+              placeholderTextColor={colors.textDisabled}
+              placeholder={t("profile_edit.daily_goal_placeholder")}
+              selectionColor={colors.primary}
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
+
+        {/* Save button */}
+        <TouchableOpacity
+          onPress={save}
+          disabled={saving}
+          activeOpacity={0.85}
+          style={styles.saveBtnWrap}
+        >
+          <LinearGradient
+            colors={colors.gradientPrimary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+          >
+            {saving ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <>
+                <Check size={18} color="white" />
+                <Text style={styles.saveBtnText}>{t("profile_edit.save_button")}</Text>
+              </>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
-      </View>
 
-      {/* FORM */}
-      <View style={styles.form}>
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput
-          style={styles.input}
-          value={form.fullName}
-          onChangeText={(v) => updateField("fullName", v)}
-        />
-
-        <Text style={styles.label}>Username</Text>
-        <TextInput
-          style={styles.input}
-          value={form.username}
-          onChangeText={(v) => updateField("username", v)}
-        />
-
-        <Text style={styles.label}>Daily Goal</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={form.dailyGoal}
-          onChangeText={(v) => updateField("dailyGoal", v)}
-          multiline
-        />
-      </View>
-
-      {/* SAVE BUTTON */}
-      <TouchableOpacity style={styles.saveBtn} onPress={save} disabled={saving}>
-        {saving ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text style={styles.saveText}>Save Changes</Text>
-        )}
-      </TouchableOpacity>
+        <View style={{ height: 80 }} />
+      </ScrollView>
     </View>
   );
 }
 
-/* ------------------- STYLES ------------------- */
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f172a", padding: 16 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  container: { flex: 1 },
+  loadingView: { flex: 1, justifyContent: "center", alignItems: "center" },
 
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20,
+    paddingHorizontal: Spacing.base,
+    paddingTop: 52,
+    paddingBottom: Spacing.md,
     alignItems: "center",
+    borderBottomWidth: 1,
   },
-
-  headerTitle: { color: "white", fontSize: 18, fontWeight: "600" },
-
-  avatarWrapper: { alignItems: "center", marginBottom: 20 },
-
-  avatarImg: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-  },
-
-  avatarPlaceholder: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: "#1e293b",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  cameraBtn: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "#2563eb",
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: "#0f172a",
-  },
-
-  form: { gap: 10 },
-
-  label: { color: "#94a3b8", fontSize: 14 },
-
-  input: {
-    backgroundColor: "#1e293b",
-    padding: 12,
-    borderRadius: 12,
-    fontSize: 14,
-    color: "white",
+  backBtn: {
+    width: 38, height: 38,
+    borderRadius: Radius.md,
+    justifyContent: "center", alignItems: "center",
     borderWidth: 1,
-    borderColor: "#334155",
   },
+  headerTitle: { fontSize: 18, fontWeight: "700" },
 
-  textArea: {
-    height: 80,
-    textAlignVertical: "top",
+  scrollContent: { paddingHorizontal: Spacing.base, paddingTop: Spacing.xl },
+
+  avatarSection: { alignItems: "center", marginBottom: Spacing.xl },
+  avatarWrap: { position: "relative" },
+  avatarImg: { width: 112, height: 112, borderRadius: 56, borderWidth: 3, borderColor: "#4F8EF7" },
+  avatarPlaceholder: { width: 112, height: 112, borderRadius: 56, justifyContent: "center", alignItems: "center" },
+  cameraBtn: {
+    position: "absolute", bottom: 4, right: 4,
+    backgroundColor: "#4F8EF7", padding: 8, borderRadius: 20,
+    borderWidth: 2, borderColor: "#0D1526",
   },
+  avatarHint: { fontSize: 12, marginTop: Spacing.sm },
 
-  saveBtn: {
-    backgroundColor: "#3b82f6",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 20,
+  form: { gap: Spacing.md },
+  inputGroup: { gap: Spacing.xs },
+  label: { fontSize: 13, fontWeight: "600", marginLeft: 2 },
+  input: {
+    paddingVertical: 14, paddingHorizontal: Spacing.md,
+    borderRadius: Radius.xl, fontSize: 15,
+    borderWidth: 1,
   },
+  textArea: { height: 96, textAlignVertical: "top" },
 
-  saveText: { color: "white", fontSize: 16, fontWeight: "600" },
+  saveBtnWrap: { borderRadius: Radius.xl, overflow: "hidden", marginTop: Spacing.xl },
+  saveBtn: { flexDirection: "row", gap: Spacing.sm, paddingVertical: 15, alignItems: "center", justifyContent: "center", borderRadius: Radius.xl },
+  saveBtnText: { color: "white", fontSize: 16, fontWeight: "700" },
 });

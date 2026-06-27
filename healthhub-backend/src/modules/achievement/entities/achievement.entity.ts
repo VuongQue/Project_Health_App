@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 export type AchievementCondition = {
   field: string;
-  operator: '==' | '>=' | '<=' | '>';
+  operator: '==' | '!=' | '>=' | '<=' | '>' | '<';
   value: number;
 };
 

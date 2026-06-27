@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createNotificationSocket } from "../socket/socketNotifications";
+import { onTokenChange, getUserFromToken } from "../utils/tokenStorage";
 
 export type RealtimeAchievement = {
   code: string;
@@ -8,32 +9,26 @@ export type RealtimeAchievement = {
 };
 
 export function useAchievementRealtime() {
-  const [achievement, setAchievement] =
-    useState<RealtimeAchievement | null>(null);
+  const [achievement, setAchievement] = useState<RealtimeAchievement | null>(null);
 
   useEffect(() => {
-    let socket: any;
+    let socket: any = null;
+    let mounted = true;
 
     const connect = async () => {
-      socket = await createNotificationSocket();
+      const user = await getUserFromToken();
+      if (!user || !mounted) return;
 
-      socket.connect();
+      socket = await createNotificationSocket();
+      if (!mounted) { socket.disconnect(); return; }
 
       socket.on("connect", () => {
-        console.log("🔔 [Realtime] Notification socket connected");
         socket.emit("registerUser");
       });
 
       socket.on("notification", (noti: any) => {
-        console.log("📩 [Realtime] Raw notification:", noti);
-
         if (noti.type !== "ACHIEVEMENT") return;
-
         const meta = noti.metadata;
-
-        console.log("🏅 [Realtime] Achievement metadata:", meta);
-
-        // ✅ Chuẩn hóa object cho popup
         setAchievement({
           code: meta.achievementCode,
           name: meta.name,
@@ -41,14 +36,26 @@ export function useAchievementRealtime() {
         });
       });
 
-      socket.on("disconnect", () => {
-        console.log("🔌 [Realtime] Notification socket disconnected");
-      });
+      socket.connect();
     };
 
+    // Try immediately (handles app resume with existing token)
     connect();
 
+    // Re-connect when token is saved after login
+    const unsub = onTokenChange((hasToken) => {
+      if (!hasToken) {
+        socket?.disconnect();
+        socket = null;
+      } else {
+        // Small delay to let AsyncStorage flush
+        setTimeout(() => { if (mounted) connect(); }, 100);
+      }
+    });
+
     return () => {
+      mounted = false;
+      unsub();
       socket?.disconnect();
     };
   }, []);

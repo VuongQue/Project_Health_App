@@ -8,9 +8,11 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { profileApi } from "@/src/api/profileApi";
+import { useColors, Radius } from "@/src/theme";
 
 export function PostComposer() {
   const router = useRouter();
+  const colors = useColors();
   const [avatar, setAvatar] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,27 +21,24 @@ export function PostComposer() {
     });
   }, []);
 
-  const myAvatar =
-    avatar || "https://ui-avatars.com/api/?name=Me";
+  const myAvatar = avatar || "https://ui-avatars.com/api/?name=Me";
 
   return (
-  <View style={styles.wrapper}>
-    <View style={styles.card}>
-      <Image source={{ uri: myAvatar }} style={styles.avatar} />
+    <View style={styles.wrapper}>
+      <View style={[styles.card, { backgroundColor: colors.bgCard }]}>
+        <Image source={{ uri: myAvatar }} style={styles.avatar} />
 
-      <TouchableOpacity
-        style={styles.fakeInput}
-        activeOpacity={0.8}
-        onPress={() => router.push("/(community)/create-post" as any)}
-      >
-        <Text style={styles.placeholder}>Share your thoughts...</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.fakeInput, { backgroundColor: colors.bgInput }]}
+          activeOpacity={0.8}
+          onPress={() => router.push("/(tabs)/(community)/create-post" as any)}
+        >
+          <Text style={[styles.placeholder, { color: colors.textMuted }]}>Share your thoughts...</Text>
+        </TouchableOpacity>
+      </View>
     </View>
-  </View>
-);
-
+  );
 }
-
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -49,7 +48,6 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1e293b",
     padding: 14,
     borderRadius: 20,
     marginBottom: 16,
@@ -64,16 +62,12 @@ const styles = StyleSheet.create({
 
   fakeInput: {
     flex: 1,
-    backgroundColor: "#0f172a",
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 999,
+    borderRadius: Radius.full,
   },
 
   placeholder: {
-    color: "#94a3b8",
     fontSize: 15,
   },
 });
-
-

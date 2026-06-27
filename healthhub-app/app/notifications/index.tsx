@@ -1,191 +1,282 @@
-// app/notifications.tsx (hoặc đường dẫn bạn đang dùng)
-import React from "react";
+import React, { useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet,
+  ActivityIndicator, RefreshControl,
 } from "react-native";
 import {
-  X,
-  Award,
-  Target,
-  TrendingUp,
-  Heart,
-  LucideIcon,
+  Bell, Heart, MessageSquare, UserPlus, Trophy,
+  Flame, CheckCircle, Info, Trash2, ArrowLeft,
+  Newspaper, Users, MessageCircle,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useNotifications } from "./NotificationContext";
+import { useColors, Spacing, Radius, Shadow, sw, sf } from "@/src/theme";
+import { useTheme } from "@/src/context/ThemeContext";
 
-interface NotificationItemUI {
-  id: number;
-  icon: LucideIcon;
-  color: string;
-  title: string;
-  message: string;
-  time: string;
-  unread: boolean;
+function timeAgo(dateStr: string) {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return "Vừa xong";
+  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
+  return new Date(dateStr).toLocaleDateString("vi-VN");
 }
 
-const mapNotiToUI = (item: any): NotificationItemUI => {
-  const type = item.type;
-  const base: NotificationItemUI = {
-    id: item.id,
-    icon: Heart,
-    color: "#ef4444",
-    title: type,
-    message: item.message,
-    time: new Date(item.createdAt).toLocaleString(),
-    unread: !item.isRead,
+const TYPE_CONFIG: Record<string, { icon: any; color: string; bgKey: string; label: string }> = {
+  FRIEND_REQUEST:  { icon: UserPlus,      color: "#3b82f6", bgKey: "primaryBg",     label: "Kết bạn" },
+  FRIEND_ACCEPTED: { icon: Users,         color: "#3b82f6", bgKey: "primaryBg",     label: "Bạn bè" },
+  LIKE:            { icon: Heart,         color: "#ef4444", bgKey: "dangerBg",      label: "Yêu thích" },
+  COMMENT:         { icon: MessageSquare, color: "#8b5cf6", bgKey: "purpleBg",      label: "Bình luận" },
+  POST:            { icon: Newspaper,     color: "#8b5cf6", bgKey: "purpleBg",      label: "Bài đăng" },
+  ACHIEVEMENT:     { icon: Trophy,        color: "#f59e0b", bgKey: "warningBg",     label: "Thành tích" },
+  CHALLENGE:       { icon: Flame,         color: "#f97316", bgKey: "orangeBg",      label: "Thử thách" },
+  WORKOUT:         { icon: CheckCircle,   color: "#22c55e", bgKey: "successBg",     label: "Tập luyện" },
+  MESSAGE:         { icon: MessageCircle, color: "#06b6d4", bgKey: "primaryBg",     label: "Tin nhắn" },
+  SYSTEM:          { icon: Info,          color: "#64748b", bgKey: "bgCardElevated",label: "Hệ thống" },
+  MOOD:            { icon: Heart,         color: "#ec4899", bgKey: "dangerBg",      label: "Cảm xúc" },
+};
+
+type TabKey = "all" | "social" | "health" | "system";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "all",    label: "Tất cả" },
+  { key: "social", label: "Xã hội" },
+  { key: "health", label: "Sức khoẻ" },
+  { key: "system", label: "Hệ thống" },
+];
+
+function typeToTab(type: string): TabKey {
+  if (["FRIEND_REQUEST", "FRIEND_ACCEPTED", "LIKE", "COMMENT", "POST", "MESSAGE"].includes(type)) return "social";
+  if (["ACHIEVEMENT", "CHALLENGE", "WORKOUT", "MOOD"].includes(type)) return "health";
+  return "system";
+}
+
+export default function NotificationsScreen() {
+  const router = useRouter();
+  const colors = useColors();
+  const { isDark } = useTheme();
+  const { notifications, loading, unreadCount, clearAll, markAllAsRead, markAsRead, refresh } = useNotifications();
+  const [activeTab, setActiveTab] = useState<TabKey>("all");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
   };
 
-  if (type === "ACHIEVEMENT") {
-    return { ...base, icon: Award, color: "#facc15" };
-  }
-  if (type === "CHALLENGE") {
-    return { ...base, icon: Target, color: "#22c55e" };
-  }
-  if (type === "EVENT" || type === "PLAN" || type === "WORKOUT") {
-    return { ...base, icon: TrendingUp, color: "#3b82f6" };
-  }
-
-  return base;
-};
-
-const NotificationsScreen: React.FC = () => {
-  const router = useRouter();
-  const { notifications, loading, clearAll, markAllAsRead } = useNotifications();
-
-  const mapped: NotificationItemUI[] = notifications.map(mapNotiToUI);
+  const filtered = activeTab === "all"
+    ? notifications
+    : notifications.filter((n) => typeToTab(n.type) === activeTab);
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Notifications</Text>
-          <Text style={styles.subtitle}>
-            {mapped.filter((n) => n.unread).length} new updates
-          </Text>
-        </View>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
-          <X color="#cbd5e1" size={20} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+    <View style={[styles.container, { backgroundColor: colors.bgSecondary }]}>
+      {/* HEADER */}
+      <View style={[styles.header, { backgroundColor: colors.bgPrimary, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.chipBtn]}
-          onPress={markAllAsRead}
+          style={[styles.backBtn, { backgroundColor: colors.bgCardElevated, borderColor: colors.border }]}
+          onPress={() => router.back()}
         >
-          <Text style={styles.chipText}>Mark all as read</Text>
+          <ArrowLeft size={18} color={colors.textPrimary} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.chipBtn]}
-          onPress={clearAll}
-        >
-          <Text style={styles.chipText}>Clear all</Text>
-        </TouchableOpacity>
-      </View>
 
-      {loading ? (
-        <ActivityIndicator color="#2563eb" style={{ marginTop: 30 }} />
-      ) : (
-        <View style={{ marginTop: 16 }}>
-          {mapped.length === 0 ? (
-            <Text style={{ color: "#94a3b8", textAlign: "center" }}>
-              No notifications yet.
-            </Text>
-          ) : (
-            mapped.map((item) => {
-              const Icon = item.icon;
-              return (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.notificationCard,
-                    item.unread && {
-                      borderColor: "rgba(37,99,235,0.5)",
-                      backgroundColor: "rgba(37,99,235,0.05)",
-                    },
-                  ]}
-                >
-                  <View style={styles.rowStart}>
-                    <View
-                      style={[
-                        styles.iconCircle,
-                        { backgroundColor: `${item.color}20` },
-                      ]}
-                    >
-                      <Icon color={item.color} size={18} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.rowBetween}>
-                        <Text style={styles.textWhite}>{item.title}</Text>
-                        {item.unread && <View style={styles.unreadDot} />}
-                      </View>
-                      <Text style={styles.textMuted}>{item.message}</Text>
-                      <Text style={styles.textTime}>{item.time}</Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            })
+        <View style={styles.headerCenter}>
+          <View style={[styles.bellWrap, { backgroundColor: colors.primaryBg }]}>
+            <Bell size={17} color={colors.primary} />
+          </View>
+          <View>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Thông báo</Text>
+            {unreadCount > 0 && (
+              <Text style={[styles.subtitle, { color: colors.textMuted }]}>{unreadCount} chưa đọc</Text>
+            )}
+          </View>
+          {unreadCount > 0 && (
+            <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+              <Text style={styles.badgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
+            </View>
           )}
         </View>
-      )}
-    </ScrollView>
-  );
-};
 
-export default NotificationsScreen;
+        <View style={styles.headerActions}>
+          {unreadCount > 0 && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: colors.bgCardElevated, borderColor: colors.border }]}
+              onPress={markAllAsRead}
+            >
+              <CheckCircle size={13} color={colors.success} />
+              <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Đọc tất cả</Text>
+            </TouchableOpacity>
+          )}
+          {notifications.length > 0 && (
+            <TouchableOpacity
+              style={[styles.iconBtn, { backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }]}
+              onPress={clearAll}
+            >
+              <Trash2 size={14} color={colors.danger} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* TABS */}
+      <View style={[styles.tabRow, { backgroundColor: colors.bgPrimary, borderBottomColor: colors.border }]}>
+        {TABS.map(({ key, label }) => {
+          const count = key === "all"
+            ? notifications.filter((n) => !n.isRead).length
+            : notifications.filter((n) => typeToTab(n.type) === key && !n.isRead).length;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.tab, activeTab === key && { borderBottomColor: colors.primary }]}
+              onPress={() => setActiveTab(key)}
+            >
+              <Text style={[styles.tabText, { color: activeTab === key ? colors.primary : colors.textMuted },
+                activeTab === key && { fontWeight: "700" }]}>
+                {label}
+              </Text>
+              {count > 0 && (
+                <View style={[styles.tabBadge, { backgroundColor: activeTab === key ? colors.primary : colors.textMuted }]}>
+                  <Text style={styles.tabBadgeText}>{count}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* LIST */}
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+        }
+      >
+        {loading && !refreshing ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : filtered.length === 0 ? (
+          <View style={styles.empty}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.bgCard }]}>
+              <Bell size={32} color={colors.textMuted} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Không có thông báo</Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              {activeTab === "all" ? "Khi có hoạt động mới sẽ xuất hiện ở đây" :
+               activeTab === "social" ? "Chưa có hoạt động từ bạn bè" :
+               activeTab === "health" ? "Chưa có thành tích hay thử thách mới" :
+               "Chưa có thông báo hệ thống"}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.listCard, { backgroundColor: colors.bgPrimary }]}>
+            {filtered.map((n, i) => {
+              const cfg = TYPE_CONFIG[n.type] ?? TYPE_CONFIG["SYSTEM"];
+              const Icon = cfg.icon;
+              const bg = (colors as any)[cfg.bgKey] ?? colors.bgCardElevated;
+              return (
+                <TouchableOpacity
+                  key={n.id}
+                  style={[
+                    styles.item,
+                    { borderBottomColor: colors.border },
+                    !n.isRead && { backgroundColor: colors.primaryBg },
+                    i === filtered.length - 1 && { borderBottomWidth: 0 },
+                  ]}
+                  onPress={() => !n.isRead && markAsRead(n.id)}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: bg }]}>
+                    <Icon size={18} color={cfg.color} />
+                  </View>
+
+                  <View style={styles.itemBody}>
+                    <View style={styles.itemTop}>
+                      <View style={[styles.typePill, { backgroundColor: bg }]}>
+                        <Text style={[styles.typeText, { color: cfg.color }]}>{cfg.label}</Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[styles.itemMsg, { color: n.isRead ? colors.textSecondary : colors.textPrimary }]}
+                      numberOfLines={3}
+                    >
+                      {n.message}
+                    </Text>
+                    <Text style={[styles.itemTime, { color: colors.textMuted }]}>{timeAgo(n.createdAt)}</Text>
+                  </View>
+
+                  {!n.isRead && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+        <View style={{ height: 120 }} />
+      </ScrollView>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#0f172a", flex: 1, padding: 16 },
+  container: { flex: 1 },
+  center: { paddingTop: sw(60), alignItems: "center" },
+
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: Spacing.base,
+    paddingTop: sw(52), paddingBottom: Spacing.md,
+    borderBottomWidth: 1, gap: Spacing.sm,
   },
-  title: { color: "white", fontSize: 24, fontWeight: "bold" },
-  subtitle: { color: "#94a3b8", fontSize: 13 },
-  closeBtn: {
-    backgroundColor: "#1e293b",
-    borderRadius: 12,
-    padding: 8,
+  backBtn: {
+    width: sw(36), height: sw(36), borderRadius: Radius.md,
+    alignItems: "center", justifyContent: "center", borderWidth: 1,
   },
-  chipBtn: {
-    backgroundColor: "#1e293b",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  bellWrap: { width: sw(34), height: sw(34), borderRadius: Radius.md, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: sf(18), fontWeight: "800" },
+  subtitle: { fontSize: sf(12), marginTop: 1 },
+  badge: { borderRadius: sw(10), minWidth: sw(20), paddingHorizontal: sw(5), paddingVertical: sw(2), alignItems: "center" },
+  badgeText: { color: "white", fontSize: sf(10), fontWeight: "bold" },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  actionBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: sw(9), paddingVertical: sw(6),
+    borderRadius: Radius.md, borderWidth: 1,
   },
-  chipText: { color: "#cbd5e1", fontSize: 12 },
-  notificationCard: {
-    backgroundColor: "#1e293b",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#334155",
-    padding: 12,
-    marginBottom: 10,
+  actionBtnText: { fontSize: sf(11), fontWeight: "500" },
+  iconBtn: {
+    width: sw(32), height: sw(32), borderRadius: Radius.md,
+    alignItems: "center", justifyContent: "center", borderWidth: 1,
   },
-  rowStart: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  iconCircle: {
-    padding: 8,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
+
+  tabRow: { flexDirection: "row", borderBottomWidth: 1 },
+  tab: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 4, paddingVertical: sw(11),
+    borderBottomWidth: 2, borderBottomColor: "transparent",
   },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between" },
-  textWhite: { color: "white", fontWeight: "500" },
-  textMuted: { color: "#94a3b8", fontSize: 13, marginVertical: 2 },
-  textTime: { color: "#64748b", fontSize: 11 },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    backgroundColor: "#2563eb",
-    borderRadius: 4,
-    marginTop: 4,
+  tabText: { fontSize: sf(12), fontWeight: "500" },
+  tabBadge: { borderRadius: sw(8), minWidth: sw(16), paddingHorizontal: sw(4), paddingVertical: sw(1), alignItems: "center" },
+  tabBadgeText: { color: "white", fontSize: sf(9), fontWeight: "bold" },
+
+  listCard: { marginBottom: Spacing.sm },
+  item: {
+    flexDirection: "row", alignItems: "flex-start",
+    paddingHorizontal: Spacing.base, paddingVertical: sw(13),
+    borderBottomWidth: 1, gap: Spacing.md,
   },
+  iconBox: { width: sw(44), height: sw(44), borderRadius: Radius.lg, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  itemBody: { flex: 1 },
+  itemTop: { flexDirection: "row", alignItems: "center", marginBottom: sw(4) },
+  typePill: { paddingHorizontal: sw(7), paddingVertical: sw(2), borderRadius: Radius.sm },
+  typeText: { fontSize: sf(10), fontWeight: "700" },
+  itemMsg: { fontSize: sf(14), lineHeight: 20 },
+  itemTime: { fontSize: sf(11), marginTop: sw(4) },
+  dot: { width: sw(8), height: sw(8), borderRadius: sw(4), marginTop: sw(8), flexShrink: 0 },
+
+  empty: { alignItems: "center", paddingTop: sw(60), gap: sw(10), paddingHorizontal: Spacing.xl },
+  emptyIcon: { width: sw(72), height: sw(72), borderRadius: sw(20), alignItems: "center", justifyContent: "center" },
+  emptyTitle: { fontSize: sf(17), fontWeight: "700" },
+  emptyText: { fontSize: sf(13), textAlign: "center" },
 });

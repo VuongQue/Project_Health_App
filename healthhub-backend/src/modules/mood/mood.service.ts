@@ -26,7 +26,7 @@ export interface TodayMoodDto {
 
 export interface WeekTrendDto {
   labels: string[];
-  values: number[];
+  values: (number | null)[];
 }
 
 export interface SummaryDto {
@@ -123,17 +123,10 @@ export class MoodService {
         // 1️⃣ Tổng số ngày đã ghi mood
         const moodCount = await this.moodModel.countDocuments({ userId });
 
-        // 2️⃣ BIRTHDAY_MOOD (secret)
-        let birthday = 0;
-        if (dto.date) {
-          const today = new Date(dto.date);
-          // nếu user có birthday → so sánh ở đây
-          // (giả sử user.birthDate có ở user service / profile)
-          // 👉 nếu chưa có thì để 0
-        }
+        const birthday = 0; // birthDate field not yet in user entity
 
         await this.achievementEngine.evaluate(
-          { id: Number(userId) } as any, // AchievementEngine chỉ cần user.id
+          Number(userId),
           'MOOD_CREATED',
           {
             moodCount,
@@ -298,16 +291,15 @@ export class MoodService {
     }
 
     const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const values: number[] = [];
+    const values: (number | null)[] = [];
 
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
 
       const ts = d.getTime();
-      const score = map.get(ts) ?? 3; // default neutral = 3
-
-      values.push(score);
+      // null = no entry that day; frontend can render gap instead of fake neutral
+      values.push(map.get(ts) ?? null);
     }
 
     return { labels, values };

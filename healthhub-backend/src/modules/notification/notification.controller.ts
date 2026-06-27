@@ -4,6 +4,7 @@ import {
   Patch,
   Delete,
   Param,
+  Query,
   UseGuards,
   Req,
   Logger,
@@ -23,23 +24,19 @@ export class NotificationController {
   // 🔔 GET MY NOTIFICATIONS
   // =====================================================
   @Get()
-  async getMyNotifications(@Req() req) {
+  async getMyNotifications(
+    @Req() req,
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+  ) {
     const userId = Number(req.user?.userId);
-
-    this.logger.log(
-      `[GET] /notifications → userId=${userId}`,
+    const result = await this.notiService.getMyNotifications(
+      userId,
+      Number(page),
+      Number(limit),
     );
-    this.logger.debug(
-      `JWT payload: ${JSON.stringify(req.user)}`,
-    );
-
-    const list = await this.notiService.getMyNotifications(userId);
-
-    this.logger.log(
-      `[GET] /notifications → returned ${list.length} items`,
-    );
-
-    return list;
+    this.logger.log(`[GET] /notifications → userId=${userId}, total=${result.total}`);
+    return result;
   }
 
   // =====================================================

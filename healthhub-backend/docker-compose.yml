@@ -93,6 +93,16 @@ services:
       - healthhub_network
 
 
+  # ---------------------- REDIS ----------------------
+  redis:
+    image: redis:7-alpine
+    container_name: redis_healthhub
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - healthhub_network
+
   # ---------------------- BACKEND APP ----------------------
   # backend:
   #   build: .

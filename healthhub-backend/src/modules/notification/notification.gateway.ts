@@ -36,8 +36,12 @@ export class NotificationGateway {
       this.logger.log(
         `🔌 Connected: ${client.id}, userId = ${client.data.user.id}`,
       );
-    } catch (err) {
-      this.logger.error("❌ Invalid WS token", err);
+    } catch (err: any) {
+      if (err?.name === 'TokenExpiredError') {
+        this.logger.warn(`⏰ WS token expired: ${client.id} — client should refresh token`);
+      } else {
+        this.logger.error("❌ Invalid WS token", err);
+      }
       client.disconnect();
     }
   }
@@ -56,7 +60,8 @@ export class NotificationGateway {
   }
 
   sendNotificationToUser(userId: number, noti: any) {
-      this.server.to(`user_${userId}`).emit("notification", {
+    if (!this.server) return;
+    this.server.to(`user_${userId}`).emit("notification", {
       id: noti.id,
       type: noti.type,
       message: noti.message,

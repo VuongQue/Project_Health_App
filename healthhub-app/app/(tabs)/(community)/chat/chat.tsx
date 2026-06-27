@@ -69,7 +69,7 @@ export default function ChatScreen({ friend, onBack, socket, userId, roomId }: C
 
           <View className="ml-3">
             <Text className="text-white text-base font-semibold">{friend.name}</Text>
-            <Text className="text-green-400 text-xs">● Active now</Text>
+            <Text className="text-green-400 text-xs">● Đang hoạt động</Text>
           </View>
         </View>
       </View>
@@ -119,7 +119,7 @@ export default function ChatScreen({ friend, onBack, socket, userId, roomId }: C
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder="Message..."
+            placeholder="Nhắn tin..."
             placeholderTextColor="#64748b"
             className="flex-1 bg-[#1e293b] text-white px-4 py-3 rounded-2xl border border-[#334155]"
           />

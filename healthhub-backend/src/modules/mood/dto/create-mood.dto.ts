@@ -1,4 +1,4 @@
-import { IsDateString, IsNotEmpty, IsOptional, IsString, IsArray, ValidateNested, IsNumber } from 'class-validator';
+import { IsDateString, IsOptional, IsString, IsArray, ValidateNested, IsNumber, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class MoodObjectDto {
@@ -9,7 +9,9 @@ class MoodObjectDto {
   color: string;
 
   @IsNumber()
-  score: number; // -2 .. +2
+  @Min(1)
+  @Max(5)
+  score: number; // 1 (very sad) → 5 (great)
 }
 
 export class CreateMoodDto {

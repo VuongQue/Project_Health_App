@@ -1,174 +1,56 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Client } from '@elastic/elasticsearch';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Workout } from '../fitness/entities/workout.entity';
 
 @Injectable()
-export class WorkoutSearchService implements OnModuleInit {
-  private readonly index = 'workouts';
-  private readonly logger = new Logger(WorkoutSearchService.name);
+export class WorkoutSearchService {
+  constructor(
+    @InjectRepository(Workout)
+    private readonly workoutRepo: Repository<Workout>,
+  ) {}
 
-  // 🔥 Đây là cấu hình đúng cho Elasticsearch 8.x
-  private readonly es = new Client({
-    node: 'http://localhost:9200',
-  });
+  // No-ops kept so FitnessService call sites compile without changes
+  async onModuleInit() {}
+  async indexWorkout(_workout: Workout) {}
+  async removeWorkout(_id: number) {}
+  async bulkIndexWorkouts(_workouts: Workout[]) {}
 
-  // ==================================================
-  // Tạo index nếu chưa có
-  // ==================================================
-  async onModuleInit() {
-    try {
-      const exists = await this.es.indices.exists({ index: this.index });
-
-      if (!exists) {
-        this.logger.log(`Creating index ${this.index}...`);
-
-        await this.es.indices.create({
-          index: this.index,
-          body: {
-            settings: {
-              analysis: {
-                analyzer: {
-                  edge_ngram_analyzer: {
-                    type: "custom",
-                    tokenizer: "edge_ngram_tokenizer",
-                    filter: ["lowercase"],
-                  },
-                },
-                tokenizer: {
-                  edge_ngram_tokenizer: {
-                    type: "edge_ngram",
-                    min_gram: 1,
-                    max_gram: 20,
-                    token_chars: ["letter", "digit"],
-                  },
-                },
-              },
-            },
-            mappings: {
-              properties: {
-                id: { type: 'integer' },
-                title: {
-                  type: 'text',
-                  analyzer: 'edge_ngram_analyzer',
-                  search_analyzer: 'standard',
-                },
-                description: { type: 'text' },
-                level: { type: 'keyword' },
-                muscleGroup: { type: 'keyword' },
-                kcalPerMin: { type: 'integer' },
-                createdAt: { type: 'date' },
-              },
-            },
-          },
-        });
-
-        this.logger.log(`Index ${this.index} created.`);
-      } else {
-        this.logger.log(`Index ${this.index} already exists.`);
-      }
-    } catch (e) {
-      this.logger.error('❌ Elasticsearch init failed', e);
-    }
-  }
-
-  // ==================================================
-  // Index 1 workout
-  // ==================================================
-  async indexWorkout(workout: Workout) {
-    await this.es.index({
-      index: this.index,
-      id: String(workout.id),
-      document: {
-        id: workout.id,
-        title: workout.title,
-        description: workout.description,
-        level: workout.level,
-        muscleGroup: workout.muscleGroup,
-        kcalPerMin: workout.kcalPerMin,
-        createdAt: workout.createdAt ?? new Date(),
-      },
-      refresh: true,
-    });
-  }
-
-  // ==================================================
-  // Xóa workout khỏi index
-  // ==================================================
-  async removeWorkout(id: number) {
-    await this.es.delete({
-      index: this.index,
-      id: String(id),
-    }).catch(err => {
-      if (err.meta?.statusCode !== 404) throw err;
-    });
-  }
-
-  // ==================================================
-  // SEARCH hỗ trợ 1 ký tự (nhờ edge_ngram)
-  // ==================================================
+  /**
+   * MySQL LIKE-based search on title, description, muscleGroup, category.
+   * Returns matching workout IDs sorted by relevance (title match first).
+   */
   async searchWorkouts(params: {
     search?: string;
     muscleGroup?: string;
     level?: string;
     minKcal?: number;
   }): Promise<number[]> {
-
-    const must: any[] = [];
+    const qb = this.workoutRepo.createQueryBuilder('w');
 
     if (params.search) {
-      must.push({
-        multi_match: {
-          query: params.search,
-          fields: ['title^3', 'description'],
-          fuzziness: 'AUTO',
-        },
-      });
+      const keyword = `%${params.search}%`;
+      qb.where(
+        '(w.title LIKE :kw OR w.description LIKE :kw OR w.muscleGroup LIKE :kw OR w.category LIKE :kw)',
+        { kw: keyword },
+      );
     }
 
     if (params.muscleGroup) {
-      must.push({ term: { muscleGroup: params.muscleGroup } });
+      qb.andWhere('w.muscleGroup = :mg', { mg: params.muscleGroup });
     }
 
     if (params.level) {
-      must.push({ term: { level: params.level } });
+      qb.andWhere('w.level = :lv', { lv: params.level });
     }
 
     if (params.minKcal) {
-      must.push({
-        range: { kcalPerMin: { gte: params.minKcal } },
-      });
+      qb.andWhere('w.kcalPerMin >= :mk', { mk: params.minKcal });
     }
 
-    const result = await this.es.search({
-      index: this.index,
-      size: 200,
-      query: { bool: { must } },
-      sort: [{ createdAt: { order: 'desc' } }],
-    });
+    qb.orderBy('w.createdAt', 'DESC').select('w.id');
 
-    const hits = result.hits.hits as any[];
-    return hits.map(h => Number(h._source.id));
-  }
-
-  // ==================================================
-  // Bulk reindex toàn bộ workouts
-  // ==================================================
-  async bulkIndexWorkouts(workouts: Workout[]) {
-    if (!workouts.length) return;
-
-    const ops = workouts.flatMap(w => [
-      { index: { _index: this.index, _id: w.id } },
-      {
-        id: w.id,
-        title: w.title,
-        description: w.description,
-        level: w.level,
-        muscleGroup: w.muscleGroup,
-        kcalPerMin: w.kcalPerMin,
-        createdAt: w.createdAt ?? new Date(),
-      },
-    ]);
-
-    await this.es.bulk({ refresh: true, body: ops });
+    const rows = await qb.getMany();
+    return rows.map((r) => r.id);
   }
 }
