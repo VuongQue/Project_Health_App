@@ -1,94 +1,214 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Challenge } from './entities/challenge.entity';
 import { UserChallenge } from './entities/user-challenge.entity';
-import { UsersService } from '../users/users.service';
-import { AchievementListener } from '../achievement/achievement.listener';
-import { NotificationService } from '../notification/notification.service';
-import { NotificationGateway } from '../notification/notification.gateway';
+import { CreateChallengeDto } from './dto/create-challenge.dto';
+import { UpdateChallengeDto } from './dto/update-challenge.dto';
 
 @Injectable()
 export class ChallengeService {
   constructor(
     @InjectRepository(Challenge) private challengeRepo: Repository<Challenge>,
     @InjectRepository(UserChallenge) private userChallengeRepo: Repository<UserChallenge>,
-    private usersService: UsersService,
-    private achListener: AchievementListener,
-    private notiService: NotificationService,
-    private notiGateway: NotificationGateway,
   ) {}
 
-  async create(dto: any) {
-    const challenge = this.challengeRepo.create(dto);
-    return this.challengeRepo.save(challenge);
+  // Admin create
+  async create(dto: CreateChallengeDto) {
+    const c = this.challengeRepo.create({
+      ...dto,
+      isActive: dto.isActive ?? true,
+      isPublic: dto.isPublic ?? true,
+    });
+    return this.challengeRepo.save(c);
   }
 
-  getAll() {
-    return this.challengeRepo.find();
+  async update(id: number, dto: UpdateChallengeDto) {
+    const c = await this.challengeRepo.findOne({ where: { id } });
+    if (!c) throw new NotFoundException('Challenge not found');
+    Object.assign(c, dto);
+    return this.challengeRepo.save(c);
   }
 
-  async join(userEmail: string, challengeId: number) {
-    const user = await this.usersService.findByEmail(userEmail);
-    if (!user) {
-    throw new NotFoundException(`User with email ${userEmail} not found`);
+  async deactivate(id: number) {
+    const c = await this.challengeRepo.findOne({ where: { id } });
+    if (!c) throw new NotFoundException('Challenge not found');
+    c.isActive = false;
+    return this.challengeRepo.save(c);
   }
-    const challenge = await this.challengeRepo.findOne({ where: { id: challengeId } });
-    if (!challenge) {
-    throw new NotFoundException(`Challenge ${challengeId} not found`);
-  }
-    const record = this.userChallengeRepo.create({ user, challenge });
+
+  /**
+   * List challenge public + kèm trạng thái user đã join hay chưa
+   */
+  async listForUser(userId?: number) {
+    const challenges = await this.challengeRepo.find({
+      where: { isActive: true, isPublic: true },
+      order: { createdAt: 'DESC' },
+    });
+
+    // chưa login → chỉ xem public
+    if (!userId) {
+      return challenges.map((c) => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        type: c.type,
+        targetCount: c.targetCount,
+        durationDays: c.durationDays ?? null,
+        joined: false,
+      }));
+    }
+
+    const userChallenges = await this.userChallengeRepo.find({
+      where: {
+        user: { id: userId },
+        challenge: { id: In(challenges.map((c) => c.id)) },
+      },
+      relations: ['challenge'],
+    });
+
+    const map = new Map<number, UserChallenge>();
+    userChallenges.forEach((uc) => map.set(uc.challenge.id, uc));
+
+    return challenges.map((c) => {
+      const uc = map.get(c.id);
+
+      return {
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        type: c.type,
+        targetCount: c.targetCount,
+        durationDays: c.durationDays ?? null,
+
+        joined: !!uc,
+
+        userChallenge: uc
+          ? {
+              id: uc.id,
+              completedCount: uc.completedCount,
+              progress:
+                c.targetCount > 0
+                  ? uc.completedCount / c.targetCount
+                  : 0,
+              status: uc.status,
+              currentStreak: uc.currentStreak,
+              maxStreak: uc.maxStreak,
+            }
+          : null,
+      };
+    });
+    }
+
+
+  async join(userId: number, challengeId: number) {
+    const challenge = await this.challengeRepo.findOne({
+      where: { id: challengeId, isActive: true },
+    });
+    if (!challenge) throw new NotFoundException('Challenge not found');
+
+    const existed = await this.userChallengeRepo.findOne({
+      where: { user: { id: userId }, challenge: { id: challengeId } },
+    });
+    if (existed) {
+      throw new BadRequestException('Bạn đã tham gia thử thách này rồi');
+    }
+
+    const record = this.userChallengeRepo.create({
+      user: { id: userId } as any,
+      challenge,
+      status: 'ongoing',
+      completedCount: 0,
+      currentStreak: 0,
+      maxStreak: 0,
+      lastCompletedDate: null,
+      todayCount: 0,
+      todayKey: null,
+    });
+
     return this.userChallengeRepo.save(record);
   }
 
-  async myChallenges(userEmail: string) {
-    const user = await this.usersService.findByEmail(userEmail);
-    if (!user) {
-    throw new NotFoundException(`User with email ${userEmail} not found`);
-  }
-    console.log('🔍 JWT email:', userEmail);
-    console.log('🔍 DB user id:', user?.id);
 
-    return this.userChallengeRepo.find({
-    where: { user: { id: user.id } },
-    relations: ['challenge'],
+  async leave(userId: number, userChallengeId: number) {
+    const uc = await this.userChallengeRepo.findOne({
+      where: { id: userChallengeId, user: { id: userId } },
     });
+    if (!uc) throw new NotFoundException('UserChallenge not found');
+    await this.userChallengeRepo.delete(uc.id);
+    return { message: 'Left challenge' };
   }
 
-  async completeChallenge(userEmail: string, challengeId: number) {
-    const user = await this.usersService.findByEmail(userEmail);
-    if (!user) {
-    throw new NotFoundException(`User with email ${userEmail} not found`);
+  async myChallenges(userId: number) {
+    const list = await this.userChallengeRepo.find({
+      where: { user: { id: userId } },
+      relations: ['challenge'],
+      order: { joinedAt: 'DESC' },
+    });
+
+    return list.map((uc) => ({
+      id: uc.id,
+      challengeId: uc.challenge.id,
+      name: uc.challenge.name,
+      description: uc.challenge.description,
+      type: uc.challenge.type,
+      targetCount: uc.challenge.targetCount,
+      completedCount: uc.completedCount,
+      progress: uc.challenge.targetCount ? uc.completedCount / uc.challenge.targetCount : 0,
+      status: uc.status,
+      currentStreak: uc.currentStreak,
+      maxStreak: uc.maxStreak,
+      lastCompletedDate: uc.lastCompletedDate,
+      joinedAt: uc.joinedAt,
+    }));
   }
-    console.log('🔍 JWT email:', userEmail);
-    console.log('🔍 DB user id:', user?.id);
-    const record = await this.userChallengeRepo.findOne({
-    where: {
-        user: { id: user.id },
-        challenge: { id: challengeId },
-    },
-    relations: ['challenge'],
-    });
-    if (!record) throw new NotFoundException('Bạn chưa tham gia thử thách này');
-    record.status = 'completed';
-    await this.userChallengeRepo.save(record);
 
-    await this.notiService.create(user, 'CHALLENGE', `Bạn đã hoàn thành thử thách "${record.challenge.name}"!`);
-    this.notiGateway.sendNotificationToUser(user.id, {
-    type: 'CHALLENGE',
-    message: `Bạn đã hoàn thành thử thách "${record.challenge.name}"!`,
+  async getOneUserChallenge(userId: number, userChallengeId: number) {
+    const uc = await this.userChallengeRepo.findOne({
+      where: { id: userChallengeId, user: { id: userId } },
+      relations: ['challenge'],
     });
-
-
-    // 🏅 Trao huy hiệu đầu tiên
-    const count = await this.userChallengeRepo.count({
-      where: { 
-        user: { id: user.id },
-        status: 'completed' },
-    });
-    if (count === 1) {
-      await this.achListener.unlockAchievement(user, 'FIRST_CHALLENGE');
-    }
-    return record;
+    if (!uc) throw new NotFoundException('UserChallenge not found');
+    return uc;
   }
+
+  async getUserActiveChallenges(userId: number) {
+    const list = await this.userChallengeRepo.find({
+      where: {
+        user: { id: userId },
+        status: 'ongoing',
+      },
+      relations: ['challenge'],
+      order: { joinedAt: 'DESC' },
+    });
+
+    return list.map((uc) => ({
+      id: uc.id,
+      challengeId: uc.challenge.id,
+      name: uc.challenge.name,
+      description: uc.challenge.description,
+      type: uc.challenge.type,
+      targetCount: uc.challenge.targetCount,
+      completedCount: uc.completedCount,
+      progress:
+        uc.challenge.targetCount > 0
+          ? uc.completedCount / uc.challenge.targetCount
+          : 0,
+      currentStreak: uc.currentStreak,
+      maxStreak: uc.maxStreak,
+      lastCompletedDate: uc.lastCompletedDate,
+      joinedAt: uc.joinedAt,
+    }));
+  }
+
+  async findAll() {
+    return this.challengeRepo.find({
+      order: { createdAt: 'DESC' },
+    });
+  }
+  
+  async remove(id: number) {
+    return this.deactivate(id);
+  }
+
 }

@@ -1,39 +1,64 @@
-import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ChallengeService } from './challenge.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { JoinChallengeDto } from './dto/join-challenge.dto';
 import { CreateChallengeDto } from './dto/create-challenge.dto';
+import { UpdateChallengeDto } from './dto/update-challenge.dto';
 
 @Controller('challenges')
 export class ChallengeController {
-    constructor(private challengeService: ChallengeService) {}
+  constructor(private readonly challengeService: ChallengeService) {}
 
-    @UseGuards(JwtAuthGuard)
-    @Post()
-    create(@Req() req, @Body() dto: CreateChallengeDto) {
-        return this.challengeService.create(dto);
-    }
+  // Public list (có thể kèm joined nếu có token)
+  @UseGuards(JwtAuthGuard)
+  @Get()
+  list(@Req() req: any) {
+    return this.challengeService.listForUser(req.user.userId);
+  }
 
-    @Get()
-    getAll() {
-        return this.challengeService.getAll();
-    }
 
-    @UseGuards(JwtAuthGuard)
-    @Post(':id/join')
-    join(@Req() req, @Param('id') id: number) {
-        return this.challengeService.join(req.user.email, id);
-    }
+  // Admin create
+  @UseGuards(JwtAuthGuard)
+  @Post()
+  create(@Body() dto: CreateChallengeDto) {
+    return this.challengeService.create(dto);
+  }
 
-    @UseGuards(JwtAuthGuard)
-    @Get('me')
-    my(@Req() req) {
-        return this.challengeService.myChallenges(req.user.email);
-    }
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  update(@Param('id') id: number, @Body() dto: UpdateChallengeDto) {
+    return this.challengeService.update(Number(id), dto);
+  }
 
-    @UseGuards(JwtAuthGuard)
-    @Post(':id/complete')
-    async complete(@Req() req, @Param('id') id: number) {
-    return this.challengeService.completeChallenge(req.user.email, id);
-}
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/deactivate')
+  deactivate(@Param('id') id: number) {
+    return this.challengeService.deactivate(Number(id));
+  }
+
+  // Join
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/join')
+  join(@Req() req: any, @Param('id') id: number) {
+    return this.challengeService.join(req.user.userId, Number(id));
+  }
+
+  // Leave (theo userChallengeId)
+  @UseGuards(JwtAuthGuard)
+  @Delete('me/:userChallengeId')
+  leave(@Req() req: any, @Param('userChallengeId') userChallengeId: number) {
+    return this.challengeService.leave(req.user.userId, Number(userChallengeId));
+  }
+
+  // My challenges
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  myChallenges(@Req() req: any) {
+    return this.challengeService.myChallenges(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/:userChallengeId')
+  myChallengeDetail(@Req() req: any, @Param('userChallengeId') userChallengeId: number) {
+    return this.challengeService.getOneUserChallenge(req.user.userId, Number(userChallengeId));
+  }
 }

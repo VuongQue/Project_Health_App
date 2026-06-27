@@ -5,14 +5,25 @@ import { FitnessController } from './fitness.controller';
 import { Workout } from './entities/workout.entity';
 import { WorkoutLog } from './entities/workout-log.entity';
 import { WorkoutPlan } from './entities/workout-plan.entity';
+import { WorkoutSession } from './entities/workout-session.entity';
+import { WorkoutExercise } from './entities/workout-exercise.entity';
 import { UsersModule } from '../users/users.module';
+import { ElasticsearchModule } from '../elasticsearch/elasticsearch.module';
+import { KafkaModule } from '../kafka/kafka.module';
+import { ChallengeModule } from '../challenge/challenge.module';
+import { AchievementModule } from '../achievement/achievement.module';
 
 @Module({
   imports: [
     UsersModule,
-    TypeOrmModule.forFeature([Workout, WorkoutLog, WorkoutPlan]),
+    ElasticsearchModule,
+    TypeOrmModule.forFeature([Workout, WorkoutLog, WorkoutPlan, WorkoutSession, WorkoutExercise]),
+    KafkaModule,
+    ChallengeModule,
+    AchievementModule,
   ],
   controllers: [FitnessController],
   providers: [FitnessService],
+  exports: [FitnessService], 
 })
 export class FitnessModule {} 

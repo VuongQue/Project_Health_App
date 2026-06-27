@@ -2,38 +2,73 @@ import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
-  MessageBody,
   ConnectedSocket,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+} from "@nestjs/websockets";
+
+import { Server, Socket } from "socket.io";
+import * as jwt from "jsonwebtoken";
+import { Logger } from "@nestjs/common";
 
 @WebSocketGateway({
-  cors: { origin: '*' }, // cho phép kết nối từ frontend
+  cors: { origin: "*" },
+  namespace: "/notifications",
 })
 export class NotificationGateway {
-  @WebSocketServer()
-  server: Server;
+  @WebSocketServer() server: Server;
 
   private logger = new Logger(NotificationGateway.name);
 
   handleConnection(client: Socket) {
-    this.logger.log(`✅ Client connected: ${client.id}`);
+    const token = client.handshake.auth?.token;
+    if (!token) {
+      this.logger.error("❌ Missing token");
+      return client.disconnect();
+    }
+
+    try {
+      const payload: any = jwt.verify(token, process.env.JWT_SECRET!);
+
+      client.data.user = {
+        id: payload.sub,
+        email: payload.email,
+      };
+
+      this.logger.log(
+        `🔌 Connected: ${client.id}, userId = ${client.data.user.id}`,
+      );
+    } catch (err: any) {
+      if (err?.name === 'TokenExpiredError') {
+        this.logger.warn(`⏰ WS token expired: ${client.id} — client should refresh token`);
+      } else {
+        this.logger.error("❌ Invalid WS token", err);
+      }
+      client.disconnect();
+    }
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`❌ Client disconnected: ${client.id}`);
+    this.logger.log(`❌ Disconnected: ${client.id}`);
   }
 
-  // Emit từ backend khi có thông báo mới
-  sendNotificationToUser(userId: number, payload: any) {
-    this.server.to(`user_${userId}`).emit('notification', payload);
+  @SubscribeMessage("registerUser")
+  handleRegister(@ConnectedSocket() client: Socket) {
+    const user = client.data.user;
+    const room = `user_${user.id}`;
+
+    client.join(room);
+    this.logger.log(`👤 User ${user.id} joined room ${room}`);
   }
 
-  // Frontend sẽ emit “registerUser” để join vào room riêng
-  @SubscribeMessage('registerUser')
-  handleRegister(@MessageBody() userId: number, @ConnectedSocket() client: Socket) {
-    client.join(`user_${userId}`);
-    this.logger.log(`👤 User ${userId} joined room user_${userId}`);
+  sendNotificationToUser(userId: number, noti: any) {
+    if (!this.server) return;
+    this.server.to(`user_${userId}`).emit("notification", {
+      id: noti.id,
+      type: noti.type,
+      message: noti.message,
+      icon: noti.icon,
+      link: noti.link,
+      metadata: noti.metadata,
+      createdAt: noti.createdAt,
+    });
   }
 }

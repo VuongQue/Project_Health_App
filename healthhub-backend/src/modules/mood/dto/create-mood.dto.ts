@@ -1,18 +1,34 @@
-import { IsDateString, IsInt, Max, Min, IsOptional, IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsDateString, IsOptional, IsString, IsArray, ValidateNested, IsNumber, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class MoodObjectDto {
+  @IsString()
+  emoji: string;
+
+  @IsString()
+  color: string;
+
+  @IsNumber()
+  @Min(1)
+  @Max(5)
+  score: number; // 1 (very sad) → 5 (great)
+}
+
 export class CreateMoodDto {
-    @ApiProperty({ example: '2024-06-15', description: 'Ngày ghi nhận tâm trạng (YYYY-MM-DD)' })
-    @IsDateString()
-    date: string;
+  @IsDateString()
+  @IsOptional()
+  date?: string; // nếu không gửi sẽ lấy ngày hôm nay
 
-    @ApiProperty({ example: 1, description: 'Điểm số tâm trạng từ -2 (Rất tệ) đến 2 (Rất tốt)' })
-    @IsInt()
-    @Min(-2)
-    @Max(2)
-    score: number;
+  @ValidateNested()
+  @Type(() => MoodObjectDto)
+  mood: MoodObjectDto;
 
-    @ApiProperty({ example: 'Cảm thấy khá ổn hôm nay.', description: 'Ghi chú thêm về tâm trạng', required: false })
-    @IsOptional()
-    @IsString()
-    note?: string;
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }

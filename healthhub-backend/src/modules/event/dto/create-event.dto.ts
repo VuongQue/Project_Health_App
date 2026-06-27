@@ -1,10 +1,23 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsString, IsOptional } from 'class-validator';
+import { IsDateString, IsString, IsOptional, IsEnum, IsInt, Min } from 'class-validator';
+import { EventScope, EventConditionType } from '../entities/event.entity';
 
 export class CreateEventDto {
-  @ApiProperty() @IsString() title: string;
-  @ApiProperty({ enum: ['online', 'offline'] }) @IsString() type: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() link?: string;
-  @ApiProperty() @IsDateString() startTime: string;
-  @ApiProperty() @IsDateString() endTime: string;
+  @IsString() title: string;
+  @IsOptional() @IsString() description?: string;
+  @IsString() type: string; // online | offline
+  @IsOptional() @IsString() link?: string;
+  @IsOptional() @IsString() coverImage?: string;
+  @IsEnum(EventScope) scope: EventScope;
+  @IsOptional() @IsString() groupId?: string;
+  @IsOptional() @IsInt() @Min(1) maxParticipants?: number;
+  @IsDateString() startTime: string;
+  @IsDateString() endTime: string;
+
+  // ─── Điều kiện tự động ────────────────────────────────────────────────────
+  @IsOptional() @IsEnum(EventConditionType)
+  conditionType?: EventConditionType;
+
+  // Ngưỡng cần đạt: số buổi tập (WORKOUT), số bước (STEPS), số ml (WATER)
+  @IsOptional() @IsInt() @Min(1)
+  conditionValue?: number;
 }

@@ -1,19 +1,23 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ChallengeService } from './challenge.service';
-import { ChallengeController } from './challenge.controller';
 import { Challenge } from './entities/challenge.entity';
 import { UserChallenge } from './entities/user-challenge.entity';
-import { UsersModule } from '../users/users.module';
+import { ChallengeService } from './challenge.service';
+import { ChallengeController } from './challenge.controller';
+import { ChallengeEngineService } from './challenge-engine.service';
+import { NotificationModule } from '../notification/notification.module';
 import { AchievementModule } from '../achievement/achievement.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Challenge, UserChallenge]),
-    UsersModule,
+    NotificationModule,
     AchievementModule,
+    UsersModule,
   ],
   controllers: [ChallengeController],
-  providers: [ChallengeService],
+  providers: [ChallengeService, ChallengeEngineService],
+  exports: [ChallengeEngineService, ChallengeService],
 })
 export class ChallengeModule {}
