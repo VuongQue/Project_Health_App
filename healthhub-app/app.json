@@ -18,8 +18,10 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "minSdkVersion": 26,
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.vuongquesteam.healthhubapp"
     },
     "web": {
       "output": "static",
@@ -51,6 +53,13 @@
       "router": {
         "stripGroupSegments": true
       }
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b9fab8a2-ee42-47dd-907d-07b493fc7587"
+      }
+    },
+    "owner": "vuongques-team"
   }
 }
