@@ -140,7 +140,7 @@ export default function WorkoutsPage() {
               <tr key={w.id} className="border-b hover:bg-gray-50 text-sm">
                 <td className="p-3 font-medium">{w.title}</td>
                 <td className="p-3">{levelBadge(w.level)}</td>
-                <td className="p-3 text-gray-600">{CATEGORY_LABELS[w.category] ?? w.category}</td>
+                <td className="p-3 text-gray-600">{w.category ? (CATEGORY_LABELS[w.category] ?? w.category) : ''}</td>
                 <td className="p-3 text-gray-600">{w.kcalPerMin}</td>
                 <td className="p-3 space-x-3">
                   <button className="text-blue-600 hover:underline" onClick={() => startEdit(w)}>
