@@ -34,6 +34,15 @@ export class WorkoutPlanDto {
   goal: string;
 }
 
+export class TranscribeMealVoiceDto {
+  @IsString()
+  audioBase64: string;
+
+  @IsString()
+  @IsOptional()
+  mimeType?: string;
+}
+
 export class CompanionMessageDto {
   @IsString()
   message: string;

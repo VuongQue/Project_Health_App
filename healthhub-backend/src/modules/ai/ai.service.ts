@@ -18,6 +18,12 @@ export interface UserHealthContext {
   weekCaloriesBurned?: number;
   bodyMetrics?: { weight?: number; height?: number; bmi?: number } | null;
   activeGoals?: { title: string; type: string; progress: number; target: number }[];
+  wearable?: {
+    avgHeartRate: number | null;
+    avgSpo2: number | null;
+    avgStress: number | null;
+    avgSleepMin: number | null;
+  } | null;
 }
 
 @Injectable()
@@ -74,6 +80,10 @@ export class AiService {
     suggestions: string[];
     motivationalMessage: string;
   }> {
+    const wearableLine = context.wearable
+      ? `- Wearable (7 ngày): Nhịp tim TB ${context.wearable.avgHeartRate ?? '?'} bpm, SpO2 ${context.wearable.avgSpo2 ?? '?'}%, Stress ${context.wearable.avgStress ?? '?'}/100, Giấc ngủ TB ${context.wearable.avgSleepMin != null ? Math.round(context.wearable.avgSleepMin / 60 * 10) / 10 + 'h' : '?'}`
+      : '';
+
     const prompt = `Phân tích dữ liệu sức khoẻ hôm nay của người dùng và trả về JSON.
 
 Dữ liệu:
@@ -85,6 +95,7 @@ Dữ liệu:
 - Bài tập tuần này: ${context.weekWorkouts ?? 0} buổi, đốt ${context.weekCaloriesBurned ?? 0} kcal
 - Chỉ số cơ thể: ${context.bodyMetrics ? `${context.bodyMetrics.weight}kg, BMI ${context.bodyMetrics.bmi}` : 'chưa cập nhật'}
 - Mục tiêu đang theo: ${context.activeGoals?.map(g => g.title).join(', ') || 'không có'}
+${wearableLine}
 
 Trả về JSON với format (KHÔNG có markdown/backtick):
 {
@@ -585,6 +596,35 @@ Quy tắc trả lời:
   {"reply": "<câu trả lời>", "suggestions": ["<gợi ý 1>", "<gợi ý 2>"]}
 - Nếu câu hỏi đơn giản, chỉ trả lời text thường (không bắt buộc JSON)
 - KHÔNG phán xét, KHÔNG so sánh với người khác`;
+  }
+
+  // ─────────────────────────────────────────────
+  // 8. Voice Meal Transcription — nhận diện giọng nói → mô tả bữa ăn
+  // ─────────────────────────────────────────────
+  async transcribeMealVoice(audioBase64: string, mimeType: string): Promise<{ transcript: string }> {
+    const prompt = `Bạn là trợ lý nhận diện món ăn từ giọng nói.
+Người dùng vừa nói về bữa ăn của họ. Hãy chuyển đổi nội dung âm thanh thành danh sách món ăn rõ ràng bằng tiếng Việt.
+
+Yêu cầu:
+- Liệt kê các món ăn, đồ uống mà người dùng đề cập
+- Kèm theo số lượng/khẩu phần nếu người dùng đề cập (ví dụ: "1 tô", "2 cái", "1 ly lớn")
+- Chỉ trả về danh sách món ăn, không thêm giải thích hay lời chào hỏi
+- Ví dụ output: "1 tô phở bò, 1 ly nước cam tươi, 1 cái bánh mì que"
+
+Hãy lắng nghe và ghi lại chính xác những gì người dùng nói về bữa ăn của họ.`;
+
+    try {
+      const geminiModel = this.genAI.getGenerativeModel({ model: this.model });
+      const result = await geminiModel.generateContent([
+        { inlineData: { mimeType, data: audioBase64 } },
+        { text: prompt },
+      ]);
+      const transcript = result.response.text().trim();
+      return { transcript };
+    } catch (err) {
+      this.logger.error('[AI] transcribeMealVoice error', err);
+      throw err;
+    }
   }
 
   // ─────────────────────────────────────────────

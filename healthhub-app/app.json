@@ -39,7 +39,8 @@
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      "react-native-health-connect"
     ],
     "experimental": {
       "reactNativeFabricEnabled": false
@@ -51,6 +52,5 @@
         "stripGroupSegments": true
       }
     }
-    
   }
 }

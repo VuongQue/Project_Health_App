@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Bell, Flame, Award, ChevronRight, Dumbbell, Trophy,
   Sparkles, Bot, Utensils, BarChart2,
-  Map, CalendarDays, Footprints, Droplets, ShieldAlert, Users, Activity,
+  Map, CalendarDays, Footprints, Droplets, ShieldAlert, Users, Activity, Watch,
 } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -448,6 +448,22 @@ export default function DashboardScreen() {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* Wearable shortcut */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.push("/(tabs)/(personal)/wearable-health" as any)}
+          style={[styles.journeyCard, { backgroundColor: colors.bgCard, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10, marginTop: sw(10) }, shadowCard]}
+        >
+          <View style={[styles.journeyIcon, { backgroundColor: "#fef3c7" }]}>
+            <Watch size={sf(20)} color="#d97706" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.journeyTitle, { color: colors.textPrimary }]}>Sức khoẻ Wearable</Text>
+            <Text style={[styles.journeySub, { color: colors.textMuted }]}>Nhịp tim · SpO2 · Giấc ngủ từ Xiaomi Band</Text>
+          </View>
+          <ChevronRight size={sf(16)} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {/* ── Active Challenges ── */}
