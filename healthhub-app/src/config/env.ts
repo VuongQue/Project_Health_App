@@ -27,7 +27,7 @@ function getBaseUrl(): string {
   }
 
   // Production build
-  return "https://api.yourdomain.com";
+  return "https://healthhub-app.duckdns.org";
 }
 
 export const API_BASE_URL = getBaseUrl();
