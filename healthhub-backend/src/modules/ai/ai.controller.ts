@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AiService, UserHealthContext } from './ai.service';
-import { AiChatDto, AnalyzeMealDto, WorkoutPlanDto, CompanionMessageDto } from './dto/ai.dto';
+import { AiChatDto, AnalyzeMealDto, WorkoutPlanDto, CompanionMessageDto, TranscribeMealVoiceDto } from './dto/ai.dto';
 import { AiChatService } from './ai-chat.service';
 import { MoodService } from '../mood/mood.service';
 import { StepsService } from '../steps/steps.service';
@@ -11,6 +11,7 @@ import { BodyMetricsService } from '../body-metrics/body-metrics.service';
 import { GoalsService } from '../goals/goals.service';
 import { FitnessService } from '../fitness/fitness.service';
 import { UsersService } from '../users/users.service';
+import { WearableHealthService } from '../wearable-health/wearable-health.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai')
@@ -26,13 +27,14 @@ export class AiController {
     private readonly goalsService: GoalsService,
     private readonly fitnessService: FitnessService,
     private readonly usersService: UsersService,
+    private readonly wearableService: WearableHealthService,
   ) {}
 
   // ─────────────────────────────────────────────
   // Helper: thu thập context sức khoẻ đầy đủ
   // ─────────────────────────────────────────────
   private async buildContext(userId: number): Promise<UserHealthContext> {
-    const [user, todayMood, stepsToday, waterToday, foodToday, bodyMetrics, activeGoals, weekSummary] =
+    const [user, todayMood, stepsToday, waterToday, foodToday, bodyMetrics, activeGoals, weekSummary, wearable] =
       await Promise.allSettled([
         this.usersService.getUserById(userId),
         this.moodService.getToday(String(userId)),
@@ -42,6 +44,7 @@ export class AiController {
         this.bodyMetricsService.getLatest(userId),
         this.goalsService.getActive(userId),
         this.fitnessService.getWeeklySummary({ id: userId } as any),
+        this.wearableService.getLatestSummaryForAi(userId),
       ]);
 
     const u = user.status === 'fulfilled' ? user.value : { fullName: 'Bạn', level: 1 };
@@ -52,6 +55,7 @@ export class AiController {
     const bm = bodyMetrics.status === 'fulfilled' ? bodyMetrics.value : null;
     const goals = activeGoals.status === 'fulfilled' ? (activeGoals.value as any[]) : [];
     const week = weekSummary.status === 'fulfilled' ? weekSummary.value : null;
+    const wear = wearable.status === 'fulfilled' ? wearable.value : null;
 
     const moodLabel: Record<number, string> = { 1: 'Buồn', 2: 'Bình thường', 3: 'Ổn', 4: 'Vui', 5: 'Tuyệt vời' };
 
@@ -77,6 +81,7 @@ export class AiController {
         progress: g.currentValue ?? 0,
         target: g.targetValue ?? 0,
       })),
+      wearable: wear ?? null,
     };
   }
 
@@ -215,6 +220,15 @@ export class AiController {
       dto.message,
       dto.history ?? [],
       dto.screen,
+    );
+  }
+
+  // POST /ai/transcribe-meal-voice
+  @Post('transcribe-meal-voice')
+  async transcribeMealVoice(@Body() dto: TranscribeMealVoiceDto) {
+    return this.aiService.transcribeMealVoice(
+      dto.audioBase64,
+      dto.mimeType ?? 'audio/m4a',
     );
   }
 

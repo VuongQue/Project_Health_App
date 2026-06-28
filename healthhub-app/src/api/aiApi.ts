@@ -53,6 +53,9 @@ export default {
   analyzeMeal: (mealDescription: string, mealType: string) =>
     axiosClient.post<MealAnalysis>("/ai/analyze-meal", { mealDescription, mealType }),
 
+  transcribeMealVoice: (audioBase64: string, mimeType: string) =>
+    axiosClient.post<{ transcript: string }>("/ai/transcribe-meal-voice", { audioBase64, mimeType }),
+
   generateWorkoutPlan: (daysPerWeek: number, goal: string) =>
     axiosClient.post<WorkoutPlan>("/ai/workout-plan", { daysPerWeek, goal }),
 

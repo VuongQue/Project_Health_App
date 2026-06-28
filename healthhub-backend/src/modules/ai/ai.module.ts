@@ -12,6 +12,7 @@ import { BodyMetricsModule } from '../body-metrics/body-metrics.module';
 import { GoalsModule } from '../goals/goals.module';
 import { FitnessModule } from '../fitness/fitness.module';
 import { UsersModule } from '../users/users.module';
+import { WearableHealthModule } from '../wearable-health/wearable-health.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { UsersModule } from '../users/users.module';
     GoalsModule,
     FitnessModule,
     UsersModule,
+    WearableHealthModule,
   ],
   controllers: [AiController],
   providers: [AiService, AiChatService],

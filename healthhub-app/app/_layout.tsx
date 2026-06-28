@@ -7,6 +7,7 @@ import { LanguageProvider } from "../src/context/LanguageContext";
 import { CompanionProvider } from "../src/context/CompanionContext";
 import { TourProvider } from "../src/context/TourContext";
 import { ScreenTourProvider } from "../src/context/ScreenTourContext";
+import { WearableHealthProvider } from "../src/context/WearableHealthContext";
 import TourOverlay from "../components/tour/TourOverlay";
 import ScreenTourOverlay from "../components/tour/ScreenTourOverlay";
 
@@ -29,6 +30,7 @@ function AppShell() {
         <Stack.Screen name="weekly-summary/index" />
         <Stack.Screen name="streak/index" />
         <Stack.Screen name="health-alerts/index" />
+        <Stack.Screen name="(tabs)/(personal)/wearable-health" />
         <Stack.Screen name="steps-challenge/index" />
         <Stack.Screen name="auth/google/callback" />
       </Stack>
@@ -46,11 +48,13 @@ export default function RootLayout() {
       <ThemeProvider>
         <NotificationProvider>
           <CompanionProvider>
-            <TourProvider>
-              <ScreenTourProvider>
-                <AppShell />
-              </ScreenTourProvider>
-            </TourProvider>
+            <WearableHealthProvider>
+              <TourProvider>
+                <ScreenTourProvider>
+                  <AppShell />
+                </ScreenTourProvider>
+              </TourProvider>
+            </WearableHealthProvider>
           </CompanionProvider>
         </NotificationProvider>
       </ThemeProvider>

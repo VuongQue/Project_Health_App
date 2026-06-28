@@ -34,6 +34,7 @@ import { GoalsModule } from './modules/goals/goals.module';
 import { StepsModule } from './modules/steps/steps.module';
 import { AiModule } from './modules/ai/ai.module';
 import { HealthJourneyModule } from './modules/health-journey/health-journey.module';
+import { WearableHealthModule } from './modules/wearable-health/wearable-health.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { HealthJourneyModule } from './modules/health-journey/health-journey.mod
     StepsModule,
     AiModule,
     HealthJourneyModule,
+    WearableHealthModule,
   ],
   providers: [AdminSeedService],
 })
