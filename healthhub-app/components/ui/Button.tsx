@@ -52,7 +52,7 @@ export default function Button({
   const isDisabled = disabled || loading;
 
   const inner = (
-    <View style={[styles.inner, icon && styles.innerWithIcon]}>
+    <View style={[styles.inner, !!icon && styles.innerWithIcon]}>
       {icon && !loading && <View style={styles.iconLeft}>{icon}</View>}
       {loading ? (
         <ActivityIndicator color={variant === 'secondary' || variant === 'ghost' ? colors.primary : 'white'} size="small" />

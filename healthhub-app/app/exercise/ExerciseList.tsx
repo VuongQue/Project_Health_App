@@ -215,10 +215,10 @@ export default function ExerciseListScreen() {
                   <View style={styles.cardStats}>
                     <Flame size={12} color={colors.orange} />
                     <Text style={[styles.statText, { color: colors.textMuted }]}>{w.kcalPerMin} kcal/min</Text>
-                    {w.exercises?.length > 0 && (
+                    {(w.exercises?.length ?? 0) > 0 && (
                       <>
                         <Clock size={12} color={colors.textMuted} />
-                        <Text style={[styles.statText, { color: colors.textMuted }]}>{w.exercises.length} bài</Text>
+                        <Text style={[styles.statText, { color: colors.textMuted }]}>{w.exercises!.length} bài</Text>
                       </>
                     )}
                   </View>

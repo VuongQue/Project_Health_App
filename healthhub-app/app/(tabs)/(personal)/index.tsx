@@ -26,6 +26,10 @@ import EmptyState from "@/components/ui/EmptyState";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { useColors, Colors, Shadow, Spacing, Radius, Typography, sw, sf, SCREEN_W } from "@/src/theme";
 import { useTheme } from "@/src/context/ThemeContext";
+import adsApi, { Advertisement } from "@/src/api/adsApi";
+import AdCard from "@/components/ads/AdCard";
+
+const AD_WORKOUT_KEY = "@ad_workout_count";
 
 const MOOD_EMOJIS = ["😔", "😐", "🙂", "😊", "😄"];
 const MOOD_LIGHT_COLORS = ["#94a3b8", "#64748b", "#D97706", "#10B981", "#3B82F6"];
@@ -71,6 +75,8 @@ export default function DashboardScreen() {
   const [todayWater, setTodayWater] = useState(0);
   const [stepGoal, setStepGoal] = useState(10000);
   const [friendCount, setFriendCount] = useState(0);
+  const [personalAd, setPersonalAd] = useState<Advertisement | null>(null);
+  const [adDismissed, setAdDismissed] = useState(false);
   const lastFetchRef = useRef<number>(0);
   const CACHE_TTL = 60_000; // 60 giây
 
@@ -139,7 +145,8 @@ export default function DashboardScreen() {
       ]);
       setMoodScore(normalizeMoodScore(moodRes.data?.today?.mood?.score));
       setMoodStreak(moodRes.data?.insights?.streak ?? 0);
-      setWorkoutsCompleted(workoutRes.data?.weekTotal?.workouts ?? 0);
+      const completedWorkouts = workoutRes.data?.weekTotal?.workouts ?? 0;
+      setWorkoutsCompleted(completedWorkouts);
       setWeekCalories(workoutRes.data?.weekTotal?.calories ?? 0);
       setChallenges(challengeRes.data ?? []);
       setAchievements(achRes.data ?? []);
@@ -150,6 +157,26 @@ export default function DashboardScreen() {
       axiosClient.get("/friends/list").then((r) => {
         setFriendCount((r.data?.friends ?? r.data ?? []).length);
       }).catch(() => {});
+
+      // Load ad: hiện sau mỗi 3 buổi tập, ẩn hẳn khi level >= 10
+      loadPersonalAd(completedWorkouts);
+    } catch {}
+  };
+
+  const loadPersonalAd = async (completedWorkouts: number) => {
+    try {
+      // Level >= 10 → không hiện quảng cáo (reward đã tắt ad)
+      const currentLevel = userLevel;
+      if (currentLevel >= 10) {
+        setPersonalAd(null);
+        return;
+      }
+      // Mỗi 3 buổi tập → hiện ad một lần
+      if (completedWorkouts > 0 && completedWorkouts % 3 === 0) {
+        setAdDismissed(false);
+        const res = await adsApi.getActive("personal_banner", ["fitness", "supplement"]);
+        setPersonalAd((res.data ?? [])[0] ?? null);
+      }
     } catch {}
   };
 
@@ -524,6 +551,20 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ── Personal Ad Banner (hiện sau 3 buổi tập, tắt khi level >= 10) ── */}
+      {personalAd && !adDismissed && userLevel < 10 && (
+        <View style={styles.section}>
+          <AdCard
+            ad={personalAd}
+            variant="full"
+            onDismiss={() => setAdDismissed(true)}
+          />
+          <Text style={[styles.adLevelHint, { color: colors.textMuted }]}>
+            🏆 Đạt Level 10 để không còn quảng cáo!
+          </Text>
+        </View>
+      )}
+
       <View style={{ height: 120 }} />
     </ScrollView>
   );
@@ -706,4 +747,7 @@ const styles = StyleSheet.create({
   bannerIcon: { width: sw(40), height: sw(40), borderRadius: Radius.md, alignItems: "center", justifyContent: "center" },
   bannerTitle: { fontWeight: "700", fontSize: sf(14) },
   bannerSub: { fontSize: sf(11), marginTop: 2 },
+
+  // Ad
+  adLevelHint: { fontSize: sf(11), textAlign: "center", marginTop: sw(4) },
 });

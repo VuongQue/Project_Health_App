@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { saveToken } from "@/src/utils/tokenStorage";
+import { saveToken, getUserFromToken } from "@/src/utils/tokenStorage";
 import { useColors } from "@/src/theme";
 
 export default function GoogleCallbackScreen() {
@@ -23,7 +23,10 @@ export default function GoogleCallbackScreen() {
       try {
         await saveToken(accessToken);
         if (refreshToken) await AsyncStorage.setItem("refresh_token", refreshToken);
-        const seen = await AsyncStorage.getItem("hasSeenOnboarding");
+        const userInfo = await getUserFromToken();
+        const genericSeen = await AsyncStorage.getItem("hasSeenOnboarding");
+        const userSeen = userInfo?.id ? await AsyncStorage.getItem(`hasSeenOnboarding_${userInfo.id}`) : null;
+        const seen = userSeen || genericSeen;
         router.replace(seen ? "/(tabs)/(personal)" : "/onboarding" as any);
       } catch {
         router.replace("/(auth)/login" as any);

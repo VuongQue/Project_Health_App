@@ -30,10 +30,10 @@ export default function StepsScreen() {
         stepsApi.getToday(),
         stepsApi.getHistory(7),
       ]);
-      const saved = (todayRes.data as DailyStepsRecord).steps;
+      const saved = (todayRes.data as DailyStepsRecord)?.steps ?? 0;
       savedRef.current = saved;
       setSteps(saved);
-      setHistory((histRes.data as DailyStepsRecord[]).reverse());
+      setHistory([...(histRes.data as DailyStepsRecord[] ?? [])].reverse());
     } catch {}
     finally {
       setRefreshing(false);
@@ -75,14 +75,12 @@ export default function StepsScreen() {
   const calories = Math.round(steps * 0.04);
   const distanceKm = (steps * 0.00078).toFixed(2);
   const minutes = Math.floor(steps / 100);
-  const maxSteps = Math.max(...history.map((r) => r.steps), 1);
+  const maxSteps = history.reduce((max, r) => Math.max(max, r.steps), 1);
 
-  const ringColor = pct >= 100 ? Colors.success : pct >= 50 ? Colors.primary : Colors.warning;
+  const ringColor = pct >= 100 ? Colors.success : Colors.primary;
   const ringGradient: [string, string] = pct >= 100
     ? [Colors.success, Colors.teal]
-    : pct >= 50
-    ? [Colors.primary, "#6366F1"]
-    : [Colors.warning, Colors.orange];
+    : [Colors.primary, "#6366F1"];
 
   return (
     <ScrollView
@@ -92,7 +90,7 @@ export default function StepsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(true); }} tintColor={colors.primary} />}
     >
       {/* Hero Header */}
-      <LinearGradient colors={["#0B1629", "#0E1B2E", colors.bgSecondary]} style={styles.hero}>
+      <LinearGradient colors={[colors.bgPrimary, colors.bgSecondary]} style={styles.hero}>
         <View style={styles.blobBL} />
         <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{t("steps.title")}</Text>
         <Text style={[styles.heroSub, { color: colors.textMuted }]}>{t("steps.subtitle")}</Text>
@@ -100,10 +98,10 @@ export default function StepsScreen() {
 
       {/* Ring Card */}
       <View style={styles.section}>
-        <LinearGradient colors={["#0E1A30", colors.bgCard]} style={[styles.ringCard, { borderColor: colors.border }]}>
+        <View style={[styles.ringCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
           {/* Circular ring visual */}
           <View style={styles.ringOuter}>
-            <View style={[styles.ringTrack, { borderColor: ringColor + "25" }]}>
+            <View style={[styles.ringTrack, { borderColor: colors.border }]}>
               <View style={[styles.ringArc, {
                 borderColor: "transparent",
                 borderTopColor: pct > 0 ? ringColor : "transparent",
@@ -127,7 +125,7 @@ export default function StepsScreen() {
               style={[styles.progressFill, { width: `${pct}%` }]}
             />
           </View>
-          <Text style={[styles.pctText, { color: colors.textMuted }]}>{Math.round(pct)}% mục tiêu hôm nay</Text>
+          <Text style={[styles.pctText, { color: colors.textMuted }]}>{Math.round(pct)}% {t("steps.goal_pct")}</Text>
 
           {/* Stats row */}
           <View style={[styles.statsRow, { borderColor: colors.border }]}>
@@ -161,7 +159,7 @@ export default function StepsScreen() {
               </LinearGradient>
             </TouchableOpacity>
           )}
-        </LinearGradient>
+        </View>
       </View>
 
       {/* Weekly Chart */}
@@ -200,7 +198,7 @@ export default function StepsScreen() {
             <View style={[styles.weekTotalRow, { borderColor: colors.border }]}>
               <Footprints size={13} color={colors.textMuted} />
               <Text style={[styles.weekTotalText, { color: colors.textMuted }]}>
-                Tổng tuần: {history.reduce((s, r) => s + r.steps, 0).toLocaleString()} bước
+                {t("steps.week_total", { total: history.reduce((s, r) => s + r.steps, 0).toLocaleString() })}
               </Text>
             </View>
           </View>

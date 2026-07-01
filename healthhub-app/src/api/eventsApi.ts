@@ -5,7 +5,7 @@ export type RegistrationStatus = "registered" | "checked_in" | "completed" | "ca
 export type EventConditionType = "MANUAL" | "WORKOUT" | "STEPS" | "WATER" | "MEDIA";
 
 export const CONDITION_LABELS: Record<EventConditionType, string> = {
-  MANUAL:  "Check-in tay",
+  MANUAL:  "Xác nhận tự động",
   WORKOUT: "Hoàn thành buổi tập",
   STEPS:   "Đạt số bước chân",
   WATER:   "Uống đủ nước",
@@ -54,7 +54,7 @@ export interface EventItem {
   conditionValue?: number;
   // Thêm bởi client sau khi join với registrations
   registered?: boolean;
-  registration?: EventRegistrationItem;
+  registration?: EventRegistrationItem | null;
 }
 
 export interface EventRegistrationItem {

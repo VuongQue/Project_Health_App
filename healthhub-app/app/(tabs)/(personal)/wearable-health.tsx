@@ -156,14 +156,14 @@ export default function WearableHealthScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[styles.container, { backgroundColor: colors.bgPrimary }]}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={[styles.title, { color: colors.text }]}>Sức khoẻ Wearable</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Sức khoẻ Wearable</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Từ Xiaomi Band / Google Fit
           </Text>
@@ -197,7 +197,7 @@ export default function WearableHealthScreen() {
       </View>
 
       {/* Grid chỉ số hôm nay */}
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Hôm nay</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Hôm nay</Text>
       <View style={styles.grid}>
         <MetricCard
           icon={<Heart size={sw(20)} color="#fff" fill="#fff" />}
@@ -223,7 +223,7 @@ export default function WearableHealthScreen() {
           value={minutesToHourMin(sleep?.value ?? null)}
           sub={
             sleep?.meta
-              ? `Sâu ${minutesToHourMin(sleep.meta.deep)} · REM ${minutesToHourMin(sleep.meta.rem)}`
+              ? `Sâu ${minutesToHourMin(sleep.meta.deep ?? null)} · REM ${minutesToHourMin(sleep.meta.rem ?? null)}`
               : undefined
           }
           gradientColors={["#8b5cf6", "#6366f1"]}
@@ -259,8 +259,8 @@ export default function WearableHealthScreen() {
       {/* Tổng hợp 7 ngày */}
       {summary && (
         <>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>7 ngày qua</Text>
-          <View style={[styles.summaryBox, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>7 ngày qua</Text>
+          <View style={[styles.summaryBox, { backgroundColor: colors.bgCard }]}>
             <SummaryRow label="Nhịp tim TB" value={summary.avgHeartRate ? `${summary.avgHeartRate} bpm` : "--"} color="#ef4444" />
             <SummaryRow label="SpO2 TB" value={summary.avgSpo2 ? `${summary.avgSpo2}%` : "--"} color="#3b82f6" />
             <SummaryRow label="Stress TB" value={summary.avgStress ? `${summary.avgStress}/100` : "--"} color="#f59e0b" />
@@ -270,10 +270,10 @@ export default function WearableHealthScreen() {
           {/* Biểu đồ nhịp tim 7 ngày */}
           {summary.heartRateHistory.length > 0 && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
                 Nhịp tim 7 ngày <TrendingUp size={sf(14)} color={colors.primary} />
               </Text>
-              <View style={[styles.chartBox, { backgroundColor: colors.surface }]}>
+              <View style={[styles.chartBox, { backgroundColor: colors.bgCard }]}>
                 {summary.heartRateHistory.map((r) => (
                   <HistoryBar
                     key={r.date}
@@ -290,8 +290,8 @@ export default function WearableHealthScreen() {
           {/* Giấc ngủ 7 ngày */}
           {summary.sleepHistory.length > 0 && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Giấc ngủ 7 ngày</Text>
-              <View style={[styles.chartBox, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Giấc ngủ 7 ngày</Text>
+              <View style={[styles.chartBox, { backgroundColor: colors.bgCard }]}>
                 {summary.sleepHistory.map((r) => (
                   <HistoryBar
                     key={r.date}
@@ -309,8 +309,8 @@ export default function WearableHealthScreen() {
 
       {/* Hướng dẫn nếu chưa kết nối */}
       {!isAvailable && (
-        <View style={[styles.guideBox, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.guideTitle, { color: colors.text }]}>Cách kết nối Xiaomi Band 10</Text>
+        <View style={[styles.guideBox, { backgroundColor: colors.bgCard }]}>
+          <Text style={[styles.guideTitle, { color: colors.textPrimary }]}>Cách kết nối Xiaomi Band 10</Text>
           {[
             "1. Cài ứng dụng Zepp Life (hoặc Mi Fitness) trên điện thoại",
             "2. Kết nối Xiaomi Band 10 với Zepp Life qua Bluetooth",

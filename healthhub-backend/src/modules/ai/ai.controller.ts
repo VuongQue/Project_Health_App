@@ -12,6 +12,8 @@ import { GoalsService } from '../goals/goals.service';
 import { FitnessService } from '../fitness/fitness.service';
 import { UsersService } from '../users/users.service';
 import { WearableHealthService } from '../wearable-health/wearable-health.service';
+import { AdvertisementService } from '../advertisement/advertisement.service';
+import { AdCategory } from '../advertisement/entities/advertisement.entity';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai')
@@ -28,6 +30,7 @@ export class AiController {
     private readonly fitnessService: FitnessService,
     private readonly usersService: UsersService,
     private readonly wearableService: WearableHealthService,
+    private readonly adService: AdvertisementService,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -125,8 +128,27 @@ export class AiController {
   @Post('chat')
   async chat(@Req() req: any, @Body() dto: AiChatDto) {
     const context = await this.buildContext(req.user.userId);
-    const reply = await this.aiService.chat(context, dto.messages);
+
+    // Detect categories từ tin nhắn cuối của user để inject ads phù hợp
+    const lastUserMsg = [...dto.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+    const adCategories = this.detectAdCategories(lastUserMsg);
+    const sponsoredAds = adCategories.length > 0
+      ? await this.adService.getAdsForAiContext(adCategories).catch(() => [])
+      : [];
+
+    const reply = await this.aiService.chat(context, dto.messages, sponsoredAds);
     return { reply };
+  }
+
+  private detectAdCategories(message: string): AdCategory[] {
+    const lower = message.toLowerCase();
+    const categories: AdCategory[] = [];
+    if (/protein|whey|bcaa|supplement|vitamin|bổ sung/.test(lower)) categories.push('supplement');
+    if (/ăn|calo|dinh dưỡng|thực phẩm|bữa|carb|fat|meal/.test(lower)) categories.push('nutrition');
+    if (/tập|bài tập|gym|workout|exercise|thiết bị|dụng cụ/.test(lower)) categories.push('fitness');
+    if (/đồ|giày|quần|áo|mặc|apparel|clothes/.test(lower)) categories.push('apparel');
+    if (/thiền|thư giãn|yoga|wellness|spa|stress/.test(lower)) categories.push('wellness');
+    return categories;
   }
 
   // GET /ai/daily-insight

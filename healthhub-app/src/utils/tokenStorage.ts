@@ -7,9 +7,11 @@ const KEY = "auth_token";
 type TokenListener = (hasToken: boolean) => void;
 const listeners = new Set<TokenListener>();
 
-export const onTokenChange = (cb: TokenListener) => {
+export const onTokenChange = (cb: TokenListener): (() => void) => {
   listeners.add(cb);
-  return () => listeners.delete(cb);
+  return () => {
+    listeners.delete(cb);
+  };
 };
 
 const notifyListeners = (hasToken: boolean) => {

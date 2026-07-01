@@ -60,7 +60,29 @@ export default function EventDetailScreen() {
         eventsApi.getById(Number(id)),
         eventsApi.getLeaderboard(Number(id)),
       ]);
-      if (detailRes.status === "fulfilled") setEvent(detailRes.value.data);
+      if (detailRes.status === "fulfilled") {
+        const detail = detailRes.value.data;
+        setEvent(detail);
+
+        // MANUAL: tự động verify khi mở app, không cần user nhấn nút
+        const now = new Date();
+        const reg = detail.registration;
+        const condType = detail.conditionType ?? "MANUAL";
+        const isActive = new Date(detail.startTime) <= now && new Date(detail.endTime) >= now;
+        const today = now.toISOString().slice(0, 10);
+        const lastCheck = reg?.lastCheckInDate?.slice(0, 10);
+        const needsAutoVerify = condType === "MANUAL" && isActive && reg &&
+          reg?.status !== "cancelled" && reg?.status !== "completed" && lastCheck !== today;
+
+        if (needsAutoVerify) {
+          eventsApi.verifyProgress(Number(id))
+            .then(() => {
+              // Reload để cập nhật tiến độ mới
+              eventsApi.getById(Number(id)).then((r) => setEvent(r.data)).catch(() => {});
+            })
+            .catch(() => {});
+        }
+      }
       if (lbRes.status === "fulfilled") setLeaderboard(lbRes.value.data ?? []);
     } catch (e) {
       console.log("Load event detail error:", e);
@@ -105,31 +127,14 @@ export default function EventDetailScreen() {
 
   const handleVerifyProgress = async () => {
     if (!event) return;
-    const condType = event.conditionType ?? "MANUAL";
-    const isManual = condType === "MANUAL";
-
-    const doVerify = async () => {
-      setActionLoading(true);
-      try {
-        const res = await eventsApi.verifyProgress(event.id);
-        Alert.alert("", res.data?.message ?? "Xác nhận thành công!");
-        load();
-      } catch (e: any) {
-        Alert.alert("Chưa đủ điều kiện", e?.response?.data?.message ?? "Không thể xác nhận tiến độ");
-      } finally { setActionLoading(false); }
-    };
-
-    if (isManual) {
-      // MANUAL: hỏi xác nhận trước
-      Alert.alert(
-        "Xác nhận tiến độ hôm nay",
-        "Bạn có xác nhận đã tham gia hoạt động hôm nay?",
-        [{ text: "Huỷ", style: "cancel" }, { text: "Xác nhận", onPress: doVerify }],
-      );
-    } else {
-      // AUTO: tự check dữ liệu, không cần confirm
-      doVerify();
-    }
+    setActionLoading(true);
+    try {
+      const res = await eventsApi.verifyProgress(event.id);
+      Alert.alert("", res.data?.message ?? "Xác nhận thành công!");
+      load();
+    } catch (e: any) {
+      Alert.alert("Chưa đủ điều kiện", e?.response?.data?.message ?? "Không thể xác nhận tiến độ");
+    } finally { setActionLoading(false); }
   };
 
   if (loading) {
@@ -335,7 +340,7 @@ export default function EventDetailScreen() {
                   )}
                   {isManualCondition && (
                     <Text style={[styles.conditionDesc, { color: colors.textMuted }]}>
-                      Tự xác nhận mỗi ngày
+                      Nhấn xác nhận tiến độ mỗi ngày
                     </Text>
                   )}
                 </View>
@@ -347,16 +352,16 @@ export default function EventDetailScreen() {
               </View>
 
               {/* Hướng dẫn */}
-              {!isManualCondition && (
-                <Text style={[styles.conditionHint, { color: colors.textMuted }]}>
-                  {conditionType === "WORKOUT" &&
-                    `Hoàn thành ít nhất ${conditionValue ?? 1} buổi tập trong app mỗi ngày → nhấn "Xác nhận tiến độ" để hệ thống tự kiểm tra.`}
-                  {conditionType === "STEPS" &&
-                    `Đạt ${(conditionValue ?? 0).toLocaleString()} bước chân mỗi ngày (đồng bộ từ bước chân trong app) → nhấn "Xác nhận tiến độ".`}
-                  {conditionType === "WATER" &&
-                    `Ghi nhận uống đủ ${conditionValue ?? 0}ml nước mỗi ngày trong app → nhấn "Xác nhận tiến độ".`}
-                </Text>
-              )}
+              <Text style={[styles.conditionHint, { color: colors.textMuted }]}>
+                {isManualCondition &&
+                  `Nhấn "Xác nhận tiến độ hôm nay" mỗi ngày để ghi nhận tham gia.`}
+                {conditionType === "WORKOUT" &&
+                  `Hoàn thành ít nhất ${conditionValue ?? 1} buổi tập trong app mỗi ngày → nhấn "Xác nhận tiến độ" để hệ thống tự kiểm tra.`}
+                {conditionType === "STEPS" &&
+                  `Đạt ${(conditionValue ?? 0).toLocaleString()} bước chân mỗi ngày (đồng bộ từ bước chân trong app) → nhấn "Xác nhận tiến độ".`}
+                {conditionType === "WATER" &&
+                  `Ghi nhận uống đủ ${conditionValue ?? 0}ml nước mỗi ngày trong app → nhấn "Xác nhận tiến độ".`}
+              </Text>
             </View>
 
             {/* ONLINE LINK */}
@@ -380,7 +385,7 @@ export default function EventDetailScreen() {
             {event.createdBy && (
               <View style={[styles.card, { backgroundColor: colors.bgCard, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 12 }]}>
                 <View style={[styles.orgAvatar, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.orgAvatarText}>{event.createdBy.fullName.charAt(0)}</Text>
+                  <Text style={styles.orgAvatarText}>{event.createdBy?.fullName?.charAt(0) ?? "?"}</Text>
                 </View>
                 <View>
                   <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Người tổ chức</Text>
@@ -495,15 +500,15 @@ export default function EventDetailScreen() {
                     <Text style={styles.bigBtnText}>Nộp minh chứng hôm nay</Text>
                   </TouchableOpacity>
                 )}
-                {canVerify && !isMediaCondition && (
+                {canVerify && !isMediaCondition && !isManualCondition && (
                   <TouchableOpacity
-                    style={[styles.bigBtn, { backgroundColor: isManualCondition ? colors.success : colors.primary }, actionLoading && { opacity: 0.6 }]}
+                    style={[styles.bigBtn, { backgroundColor: colors.primary }, actionLoading && { opacity: 0.6 }]}
                     onPress={handleVerifyProgress}
                     disabled={actionLoading}
                   >
                     <CheckCircle size={18} color="white" />
                     <Text style={styles.bigBtnText}>
-                      {isManualCondition ? "Check-in hôm nay" : `Xác nhận tiến độ ${conditionEmoji[conditionType]}`}
+                      {`Xác nhận tiến độ hôm nay ${conditionEmoji[conditionType]}`}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -565,7 +570,7 @@ export default function EventDetailScreen() {
                         ) : (
                           <LinearGradient colors={Colors.gradientPrimary} style={[styles.lbAvatar, { justifyContent: "center", alignItems: "center" }]}>
                             <Text style={{ color: "white", fontWeight: "800", fontSize: sf(14) }}>
-                              {entry.fullName.charAt(0)}
+                              {entry.fullName?.charAt(0) ?? "?"}
                             </Text>
                           </LinearGradient>
                         )}
@@ -633,15 +638,15 @@ export default function EventDetailScreen() {
               <Text style={styles.bigBtnText}>Nộp minh chứng hôm nay</Text>
             </TouchableOpacity>
           )}
-          {canVerify && tab !== "progress" && !isMediaCondition && (
+          {canVerify && tab !== "progress" && !isMediaCondition && !isManualCondition && (
             <TouchableOpacity
-              style={[styles.bigBtn, { backgroundColor: isManualCondition ? colors.success : colors.primary }, actionLoading && { opacity: 0.6 }]}
+              style={[styles.bigBtn, { backgroundColor: colors.primary }, actionLoading && { opacity: 0.6 }]}
               onPress={handleVerifyProgress}
               disabled={actionLoading}
             >
               <CheckCircle size={18} color="white" />
               <Text style={styles.bigBtnText}>
-                {isManualCondition ? "Check-in hôm nay" : `Xác nhận tiến độ ${conditionEmoji[conditionType]}`}
+                {`Xác nhận tiến độ hôm nay ${conditionEmoji[conditionType]}`}
               </Text>
             </TouchableOpacity>
           )}
@@ -675,7 +680,7 @@ function PodiumItem({ entry, rank, colors, tall }: { entry: EventLeaderboardEntr
           <Text style={[styles.podiumAvatarText, tall && { fontSize: 20 }]}>{entry.fullName.charAt(0)}</Text>
         )}
       </LinearGradient>
-      <Text style={[styles.podiumName, { color: colors.textPrimary }]} numberOfLines={1}>{entry.fullName.split(" ").pop()}</Text>
+      <Text style={[styles.podiumName, { color: colors.textPrimary }]} numberOfLines={1}>{entry.fullName?.split(" ").pop() ?? ""}</Text>
       <View style={[styles.podiumBadge, { backgroundColor: rankColor + "22" }]}>
         <Text style={[styles.podiumBadgeText, { color: rankColor }]}>{entry.checkInCount} ngày</Text>
       </View>

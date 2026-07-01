@@ -13,6 +13,7 @@ import { GoalsModule } from '../goals/goals.module';
 import { FitnessModule } from '../fitness/fitness.module';
 import { UsersModule } from '../users/users.module';
 import { WearableHealthModule } from '../wearable-health/wearable-health.module';
+import { AdvertisementModule } from '../advertisement/advertisement.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { WearableHealthModule } from '../wearable-health/wearable-health.module'
     FitnessModule,
     UsersModule,
     WearableHealthModule,
+    AdvertisementModule,
   ],
   controllers: [AiController],
   providers: [AiService, AiChatService],

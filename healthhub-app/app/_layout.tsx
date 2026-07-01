@@ -30,7 +30,6 @@ function AppShell() {
         <Stack.Screen name="weekly-summary/index" />
         <Stack.Screen name="streak/index" />
         <Stack.Screen name="health-alerts/index" />
-        <Stack.Screen name="(tabs)/(personal)/wearable-health" />
         <Stack.Screen name="steps-challenge/index" />
         <Stack.Screen name="auth/google/callback" />
       </Stack>

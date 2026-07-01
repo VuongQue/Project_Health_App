@@ -23,6 +23,7 @@ import Svg, { Circle, Defs, LinearGradient as LG, Stop } from "react-native-svg"
 import fitnessApi from "@/src/api/fitnessApi";
 import { communityApi } from "@/src/api/communityApi";
 import { useColors, Colors, Spacing, Radius, Typography } from "@/src/theme";
+import { simpleCache } from "@/src/utils/simpleCache";
 
 /* =====================================================
    TRACKING LOGIC
@@ -203,6 +204,8 @@ export default function WorkoutTrainingScreen() {
     try {
       await fitnessApi.completeSession(session.id, { seconds: totalSeconds, calories });
       setShowFinishModal(false);
+      // Clear fitness cache so the weekly stats refresh after workout completion
+      simpleCache.deleteByPrefix("fitness:");
       // Navigate first, then offer share so user lands on fitness page
       router.replace("/(tabs)/(personal)/fitness" as any);
       // Small delay so navigation completes before Alert appears
