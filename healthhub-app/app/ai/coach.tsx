@@ -17,7 +17,7 @@ import { ArrowLeft, Send, Bot, User, AlertTriangle, Plus, History, Trash2, X } f
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import aiApi, { ChatMessage, ChatSession } from "@/src/api/aiApi";
-import { Colors, Spacing, Radius, Typography } from "@/src/theme";
+import { useColors, Spacing, Radius, Typography } from "@/src/theme";
 
 interface Message extends ChatMessage {
   id: string;
@@ -35,6 +35,7 @@ function toMessages(raw: { role: string; content: string }[]): Message[] {
 export default function AiCoachScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const colors = useColors();
   const flatListRef = useRef<FlatList>(null);
 
   const INIT_MESSAGE: Message = {
@@ -124,7 +125,6 @@ export default function AiCoachScreen() {
         const finalMessages = [...updated, assistantMsg];
         setMessages(finalMessages);
 
-        // Lưu lên backend
         const allMessages = finalMessages.map(({ role, content }) => ({ role, content }));
         if (currentSessionId) {
           await aiApi.saveMessages(currentSessionId, allMessages).catch(() => {});
@@ -153,23 +153,38 @@ export default function AiCoachScreen() {
     const isUser = item.role === "user";
     return (
       <View style={[styles.msgRow, isUser && styles.msgRowUser]}>
-        {!isUser && <View style={styles.avatar}><Bot size={16} color={Colors.primary} /></View>}
-        <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAi]}>
-          <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.content}</Text>
+        {!isUser && (
+          <View style={[styles.avatar, { backgroundColor: colors.primaryBg }]}>
+            <Bot size={16} color={colors.primary} />
+          </View>
+        )}
+        <View style={[
+          styles.bubble,
+          isUser
+            ? { backgroundColor: colors.primary, borderBottomRightRadius: 4 }
+            : { backgroundColor: colors.bgCard, borderBottomLeftRadius: 4 },
+        ]}>
+          <Text style={[styles.bubbleText, { color: isUser ? "#fff" : colors.textPrimary }]}>
+            {item.content}
+          </Text>
         </View>
-        {isUser && <View style={[styles.avatar, styles.avatarUser]}><User size={16} color="#fff" /></View>}
+        {isUser && (
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+            <User size={16} color="#fff" />
+          </View>
+        )}
       </View>
     );
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.bgPrimary }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
       {/* Header */}
-      <LinearGradient colors={["#1e3a5f", Colors.bgPrimary]} style={styles.header}>
+      <LinearGradient colors={["#1e3a5f", colors.bgPrimary]} style={styles.header}>
         <TouchableOpacity
           onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/(personal)")}
           style={styles.backBtn}
@@ -177,10 +192,12 @@ export default function AiCoachScreen() {
           <ArrowLeft size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <View style={styles.headerIcon}><Bot size={20} color={Colors.primary} /></View>
+          <View style={[styles.headerIcon, { backgroundColor: "rgba(59,130,246,0.15)" }]}>
+            <Bot size={20} color={colors.primary} />
+          </View>
           <View>
             <Text style={styles.headerTitle}>{t("ai.coach_title")}</Text>
-            <Text style={styles.headerSub}>{t("ai.coach_subtitle")}</Text>
+            <Text style={[styles.headerSub, { color: colors.textSecondary }]}>{t("ai.coach_subtitle")}</Text>
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -213,10 +230,12 @@ export default function AiCoachScreen() {
       {/* Typing indicator */}
       {loading && (
         <View style={styles.typingRow}>
-          <View style={styles.avatar}><Bot size={16} color={Colors.primary} /></View>
-          <View style={styles.typingBubble}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.typingText}>{t("ai.thinking")}</Text>
+          <View style={[styles.avatar, { backgroundColor: colors.primaryBg }]}>
+            <Bot size={16} color={colors.primary} />
+          </View>
+          <View style={[styles.typingBubble, { backgroundColor: colors.bgCard }]}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.typingText, { color: colors.textSecondary }]}>{t("ai.thinking")}</Text>
           </View>
         </View>
       )}
@@ -225,21 +244,25 @@ export default function AiCoachScreen() {
       {messages.length <= 1 && (
         <View style={styles.quickRow}>
           {QUICK_PROMPTS.map((q) => (
-            <TouchableOpacity key={q} style={styles.quickChip} onPress={() => sendMessage(q)}>
-              <Text style={styles.quickChipText}>{q}</Text>
+            <TouchableOpacity
+              key={q}
+              style={[styles.quickChip, { backgroundColor: colors.primaryBg, borderColor: colors.borderAccent }]}
+              onPress={() => sendMessage(q)}
+            >
+              <Text style={[styles.quickChipText, { color: colors.primaryLight }]}>{q}</Text>
             </TouchableOpacity>
           ))}
         </View>
       )}
 
       {/* Input */}
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, { backgroundColor: colors.bgSecondary, borderTopColor: colors.border }]}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.bgCard, color: colors.textPrimary }]}
           value={input}
           onChangeText={setInput}
           placeholder="Hỏi coach của bạn..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           multiline
           maxLength={300}
           onSubmitEditing={() => sendMessage(input)}
@@ -250,10 +273,10 @@ export default function AiCoachScreen() {
           disabled={!input.trim() || loading}
         >
           <LinearGradient
-            colors={input.trim() && !loading ? [Colors.primary, Colors.primaryDark] : [Colors.bgCard, Colors.bgCard]}
+            colors={input.trim() && !loading ? [colors.primary, colors.primaryDark] : [colors.bgCard, colors.bgCard]}
             style={styles.sendGradient}
           >
-            <Send size={18} color={input.trim() && !loading ? "#fff" : Colors.textMuted} />
+            <Send size={18} color={input.trim() && !loading ? "#fff" : colors.textMuted} />
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -261,35 +284,39 @@ export default function AiCoachScreen() {
       {/* History Modal */}
       <Modal visible={showHistory} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.bgSecondary }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Lịch sử trò chuyện</Text>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Lịch sử trò chuyện</Text>
               <TouchableOpacity onPress={() => setShowHistory(false)}>
-                <X size={20} color={Colors.textSecondary} />
+                <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.newSessionBtn} onPress={startNewSession}>
+            <TouchableOpacity style={[styles.newSessionBtn, { backgroundColor: colors.primary }]} onPress={startNewSession}>
               <Plus size={16} color="#fff" />
               <Text style={styles.newSessionText}>Tạo cuộc trò chuyện mới</Text>
             </TouchableOpacity>
 
             {historyLoading ? (
-              <ActivityIndicator color={Colors.primary} style={{ marginTop: 24 }} />
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
                 {sessions.length === 0 ? (
-                  <Text style={styles.emptyText}>Chưa có lịch sử trò chuyện</Text>
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>Chưa có lịch sử trò chuyện</Text>
                 ) : (
                   sessions.map((s) => (
                     <TouchableOpacity
                       key={s._id}
-                      style={[styles.sessionItem, s._id === currentSessionId && styles.sessionItemActive]}
+                      style={[
+                        styles.sessionItem,
+                        { backgroundColor: colors.bgCard, borderColor: colors.border },
+                        s._id === currentSessionId && { borderColor: colors.primary, backgroundColor: colors.primaryBg },
+                      ]}
                       onPress={() => loadSession(s)}
                     >
                       <View style={styles.sessionInfo}>
-                        <Text style={styles.sessionTitle} numberOfLines={1}>{s.title}</Text>
-                        <Text style={styles.sessionDate}>
+                        <Text style={[styles.sessionTitle, { color: colors.textPrimary }]} numberOfLines={1}>{s.title}</Text>
+                        <Text style={[styles.sessionDate, { color: colors.textMuted }]}>
                           {formatDate(s.lastActiveAt)} · {s.messages.length} tin
                         </Text>
                       </View>
@@ -298,7 +325,7 @@ export default function AiCoachScreen() {
                         onPress={() => deleteSession(s._id)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
-                        <Trash2 size={15} color={Colors.textMuted} />
+                        <Trash2 size={15} color={colors.textMuted} />
                       </TouchableOpacity>
                     </TouchableOpacity>
                   ))
@@ -313,7 +340,7 @@ export default function AiCoachScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bgPrimary },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -326,11 +353,10 @@ const styles = StyleSheet.create({
   headerCenter: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   headerIcon: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "rgba(59,130,246,0.15)",
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { color: "#fff", fontSize: Typography.md, fontWeight: "700" },
-  headerSub: { color: Colors.textSecondary, fontSize: Typography.xs, marginTop: 1 },
+  headerTitle: { color: "#fff", ...Typography.md, fontWeight: "700" },
+  headerSub: { ...Typography.xs, marginTop: 1 },
   headerActions: { flexDirection: "row", gap: 4 },
   headerBtn: {
     width: 34, height: 34, borderRadius: 17,
@@ -349,70 +375,62 @@ const styles = StyleSheet.create({
   msgRowUser: { justifyContent: "flex-end" },
   avatar: {
     width: 30, height: 30, borderRadius: 15,
-    backgroundColor: "rgba(59,130,246,0.12)",
     alignItems: "center", justifyContent: "center",
   },
-  avatarUser: { backgroundColor: Colors.primary },
   bubble: { maxWidth: "75%", borderRadius: Radius.lg, padding: 12 },
-  bubbleAi: { backgroundColor: Colors.bgCard, borderBottomLeftRadius: 4 },
-  bubbleUser: { backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
-  bubbleText: { color: Colors.textPrimary, fontSize: Typography.sm, lineHeight: 20 },
-  bubbleTextUser: { color: "#fff" },
+  bubbleText: { ...Typography.sm, lineHeight: 20 },
   typingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: Spacing.base, paddingBottom: 8 },
   typingBubble: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: Colors.bgCard, borderRadius: Radius.lg, padding: 10,
+    borderRadius: Radius.lg, padding: 10,
   },
-  typingText: { color: Colors.textSecondary, fontSize: Typography.xs },
+  typingText: { ...Typography.xs },
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: Spacing.base, paddingBottom: 8 },
   quickChip: {
-    backgroundColor: "rgba(59,130,246,0.12)", borderRadius: Radius.full,
+    borderRadius: Radius.full,
     paddingHorizontal: 12, paddingVertical: 6,
-    borderWidth: 1, borderColor: "rgba(59,130,246,0.25)",
+    borderWidth: 1,
   },
-  quickChipText: { color: Colors.primaryLight, fontSize: Typography.xs },
+  quickChipText: { ...Typography.xs },
   inputBar: {
     flexDirection: "row", alignItems: "flex-end", gap: Spacing.sm,
     paddingHorizontal: Spacing.base,
     paddingBottom: Platform.OS === "ios" ? 28 : 12,
     paddingTop: 8,
-    backgroundColor: Colors.bgSecondary,
-    borderTopWidth: 1, borderTopColor: Colors.border,
+    borderTopWidth: 1,
   },
   input: {
-    flex: 1, backgroundColor: Colors.bgCard, borderRadius: Radius.lg,
+    flex: 1, borderRadius: Radius.lg,
     paddingHorizontal: 14, paddingVertical: 10,
-    color: Colors.textPrimary, fontSize: Typography.sm, maxHeight: 100,
+    ...Typography.sm, maxHeight: 100,
   },
   sendBtn: { borderRadius: Radius.full },
   sendBtnDisabled: { opacity: 0.5 },
   sendGradient: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalSheet: {
-    backgroundColor: Colors.bgSecondary,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingTop: 16, paddingHorizontal: Spacing.base, paddingBottom: 32,
     maxHeight: "75%",
   },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
-  modalTitle: { color: Colors.textPrimary, fontSize: Typography.md, fontWeight: "700" },
+  modalTitle: { ...Typography.md, fontWeight: "700" },
   newSessionBtn: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: Colors.primary, borderRadius: Radius.lg,
+    borderRadius: Radius.lg,
     paddingVertical: 12, paddingHorizontal: Spacing.base,
     marginBottom: 16, justifyContent: "center",
   },
-  newSessionText: { color: "#fff", fontSize: Typography.sm, fontWeight: "600" },
-  emptyText: { color: Colors.textMuted, fontSize: Typography.sm, textAlign: "center", marginTop: 24 },
+  newSessionText: { color: "#fff", ...Typography.sm, fontWeight: "600" },
+  emptyText: { ...Typography.sm, textAlign: "center", marginTop: 24 },
   sessionItem: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: Colors.bgCard, borderRadius: Radius.lg,
+    borderRadius: Radius.lg,
     padding: Spacing.sm, marginBottom: 8,
-    borderWidth: 1, borderColor: Colors.border,
+    borderWidth: 1,
   },
-  sessionItemActive: { borderColor: Colors.primary, backgroundColor: "rgba(59,130,246,0.08)" },
   sessionInfo: { flex: 1 },
-  sessionTitle: { color: Colors.textPrimary, fontSize: Typography.sm, fontWeight: "600" },
-  sessionDate: { color: Colors.textMuted, fontSize: Typography.xs, marginTop: 2 },
+  sessionTitle: { ...Typography.sm, fontWeight: "600" },
+  sessionDate: { ...Typography.xs, marginTop: 2 },
   deleteBtn: { padding: 4 },
 });

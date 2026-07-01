@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { ArrowLeft, Upload, Video, Image as ImageIcon, CheckCircle } from "lucide-react-native";
 import { useColors, Spacing, Radius, sw, sf } from "@/src/theme";
 import eventsApi from "@/src/api/eventsApi";
+import axiosClient from "@/src/api/axiosClient";
 
 export default function SubmitMediaScreen() {
   const { eventId, eventTitle } = useLocalSearchParams<{ eventId: string; eventTitle: string }>();
@@ -19,6 +20,8 @@ export default function SubmitMediaScreen() {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+
+  const numericEventId = Number(Array.isArray(eventId) ? eventId[0] : eventId);
 
   const pickMedia = async (type: "video" | "image") => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -36,33 +39,34 @@ export default function SubmitMediaScreen() {
     }
   };
 
-  const uploadToCloudinary = async (): Promise<string> => {
+  const uploadToBackend = async (): Promise<string> => {
     if (!mediaUri) throw new Error("Chưa chọn file");
     setUploading(true);
     try {
-      const formData = new FormData();
       const filename = mediaUri.split("/").pop() ?? "upload";
       const ext = filename.split(".").pop() ?? (mediaType === "video" ? "mp4" : "jpg");
       const mime = mediaType === "video" ? `video/${ext}` : `image/${ext}`;
 
+      const formData = new FormData();
       formData.append("file", { uri: mediaUri, name: filename, type: mime } as any);
-      formData.append("upload_preset", "healthhub_events");
-      formData.append("folder", `events/${eventId}`);
 
-      const cloudName = "your_cloud_name"; // TODO: thay bằng cloud name thực tế
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
-        method: "POST",
-        body: formData,
+      const res = await axiosClient.post("/media/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      const data = await res.json();
-      if (!data.secure_url) throw new Error("Upload thất bại");
-      return data.secure_url;
+      const url = (res.data as any)?.secure_url;
+      if (!url) throw new Error("Upload thất bại");
+      return url;
     } finally {
       setUploading(false);
     }
   };
 
   const handleSubmit = async () => {
+    if (isNaN(numericEventId)) {
+      Alert.alert("Lỗi", "ID sự kiện không hợp lệ");
+      router.back();
+      return;
+    }
     if (!mediaUri) {
       Alert.alert("Chưa chọn file", "Vui lòng chọn video hoặc ảnh minh chứng");
       return;
@@ -71,10 +75,10 @@ export default function SubmitMediaScreen() {
     try {
       let url = uploadedUrl;
       if (!url) {
-        url = await uploadToCloudinary();
+        url = await uploadToBackend();
         setUploadedUrl(url);
       }
-      await eventsApi.submitMedia(Number(eventId), {
+      await eventsApi.submitMedia(numericEventId, {
         mediaUrl: url,
         mediaType,
         userNote: userNote.trim() || undefined,

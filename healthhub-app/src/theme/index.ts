@@ -54,8 +54,13 @@ export const Colors = {
   gradientHero:    ['#111827', '#161B26'] as const,
 } as const;
 
+// Widened color record — token string được nới rộng thành `string` (không narrow
+// về literal của dark palette), gradient giữ nguyên kiểu tuple.
+type WidenToken<T> = T extends readonly string[] ? T : string;
+type ColorTokens = { [K in keyof typeof Colors]: WidenToken<(typeof Colors)[K]> };
+
 // ── Light palette — trắng chủ đạo, hiện đại như Headspace/Apple Health ────────
-export const LightColors: Partial<typeof Colors> = {
+export const LightColors: Partial<ColorTokens> = {
   bgPrimary:       '#FFFFFF',
   bgSecondary:     '#F5F7FB',
   bgCard:          '#FFFFFF',

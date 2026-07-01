@@ -9,20 +9,20 @@ function getBaseUrl(): string {
 
   // Expo Go / dev client trên thiết bị thật → dùng IP máy host từ manifest
   if (__DEV__) {
+    // Web browser dùng local backend
+    if (Platform.OS === "web") return `http://localhost:${PORT}`;
+
     const debuggerHost =
-      Constants.expoConfig?.hostUri ??          // Expo SDK 49+
-      (Constants as any).manifest?.debuggerHost ?? // Expo SDK cũ
+      Constants.expoConfig?.hostUri ??
+      (Constants as any).manifest?.debuggerHost ??
       (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
 
     if (debuggerHost) {
-      const host = debuggerHost.split(":")[0];  // lấy IP, bỏ port
+      const host = debuggerHost.split(":")[0];
       return `http://${host}:${PORT}`;
     }
 
-    // Fallback: Android emulator
     if (Platform.OS === "android") return `http://10.0.2.2:${PORT}`;
-
-    // iOS simulator
     return `http://localhost:${PORT}`;
   }
 

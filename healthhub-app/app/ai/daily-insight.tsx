@@ -12,10 +12,10 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { ArrowLeft, Sparkles, CheckCircle, Lightbulb, Heart, RefreshCw } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import aiApi, { DailyInsight } from "@/src/api/aiApi";
-import { Colors, Spacing, Radius, Typography } from "@/src/theme";
+import { useColors, Spacing, Radius, Typography } from "@/src/theme";
 
 const CACHE_KEY = 'daily-insight:cache';
-const CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 giờ
+const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 
 async function getCached(): Promise<DailyInsight | null> {
   const raw = await AsyncStorage.getItem(CACHE_KEY);
@@ -31,6 +31,7 @@ async function saveCache(data: DailyInsight) {
 
 export default function DailyInsightScreen() {
   const router = useRouter();
+  const colors = useColors();
   const [insight, setInsight] = useState<DailyInsight | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -81,10 +82,13 @@ export default function DailyInsightScreen() {
   }, []));
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.bgPrimary }]} showsVerticalScrollIndicator={false}>
       {/* Header */}
-      <LinearGradient colors={["#1a1040", Colors.bgPrimary]} style={styles.header}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/(personal)')} style={styles.backBtn}>
+      <LinearGradient colors={["#1a1040", colors.bgPrimary]} style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/(personal)')}
+          style={styles.backBtn}
+        >
           <ArrowLeft size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
@@ -92,7 +96,7 @@ export default function DailyInsightScreen() {
             <Sparkles size={24} color="#fff" />
           </LinearGradient>
           <Text style={styles.headerTitle}>AI Daily Insight</Text>
-          <Text style={styles.headerSub}>
+          <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
             {new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long" })}
           </Text>
         </View>
@@ -102,14 +106,18 @@ export default function DailyInsightScreen() {
         {loading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color="#a855f7" />
-            <Text style={styles.loadingText}>AI đang phân tích dữ liệu sức khoẻ của bạn...</Text>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              AI đang phân tích dữ liệu sức khoẻ của bạn...
+            </Text>
           </View>
         ) : error ? (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>Không thể tải insight. Kiểm tra kết nối và thử lại.</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={loadInsight}>
-              <RefreshCw size={16} color={Colors.primary} />
-              <Text style={styles.retryText}>Thử lại</Text>
+            <Text style={[styles.errorText, { color: colors.textSecondary }]}>
+              Không thể tải insight. Kiểm tra kết nối và thử lại.
+            </Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => loadInsight(true)}>
+              <RefreshCw size={16} color={colors.primary} />
+              <Text style={[styles.retryText, { color: colors.primary }]}>Thử lại</Text>
             </TouchableOpacity>
           </View>
         ) : insight ? (
@@ -121,32 +129,35 @@ export default function DailyInsightScreen() {
             </LinearGradient>
 
             {/* Motivational message */}
-            <LinearGradient colors={["rgba(236,72,153,0.12)", "rgba(168,85,247,0.12)"]} style={styles.motivCard}>
+            <LinearGradient
+              colors={["rgba(236,72,153,0.12)", "rgba(168,85,247,0.12)"]}
+              style={[styles.motivCard, { borderColor: "rgba(236,72,153,0.2)" }]}
+            >
               <Heart size={18} color="#ec4899" />
-              <Text style={styles.motivText}>{insight.motivationalMessage}</Text>
+              <Text style={[styles.motivText, { color: colors.textPrimary }]}>{insight.motivationalMessage}</Text>
             </LinearGradient>
 
             {/* Highlights */}
-            {insight.highlights.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Điểm nổi bật</Text>
+            {(insight.highlights ?? []).length > 0 && (
+              <View style={[styles.section, { backgroundColor: colors.bgCard }]}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Điểm nổi bật</Text>
                 {insight.highlights.map((h, i) => (
                   <View key={i} style={styles.itemRow}>
-                    <CheckCircle size={16} color={Colors.success} />
-                    <Text style={styles.itemText}>{h}</Text>
+                    <CheckCircle size={16} color={colors.success} />
+                    <Text style={[styles.itemText, { color: colors.textSecondary }]}>{h}</Text>
                   </View>
                 ))}
               </View>
             )}
 
             {/* Suggestions */}
-            {insight.suggestions.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Gợi ý cải thiện</Text>
+            {(insight.suggestions ?? []).length > 0 && (
+              <View style={[styles.section, { backgroundColor: colors.bgCard }]}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Gợi ý cải thiện</Text>
                 {insight.suggestions.map((s, i) => (
                   <View key={i} style={styles.itemRow}>
-                    <Lightbulb size={16} color={Colors.warning} />
-                    <Text style={styles.itemText}>{s}</Text>
+                    <Lightbulb size={16} color={colors.warning} />
+                    <Text style={[styles.itemText, { color: colors.textSecondary }]}>{s}</Text>
                   </View>
                 ))}
               </View>
@@ -154,8 +165,8 @@ export default function DailyInsightScreen() {
 
             {/* Refresh */}
             <TouchableOpacity style={styles.refreshRow} onPress={() => loadInsight(true)}>
-              <RefreshCw size={14} color={Colors.textMuted} />
-              <Text style={styles.refreshText}>Làm mới phân tích</Text>
+              <RefreshCw size={14} color={colors.textMuted} />
+              <Text style={[styles.refreshText, { color: colors.textMuted }]}>Làm mới phân tích</Text>
             </TouchableOpacity>
           </>
         ) : null}
@@ -165,7 +176,7 @@ export default function DailyInsightScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bgPrimary },
+  container: { flex: 1 },
   header: { paddingTop: 52, paddingBottom: 24, paddingHorizontal: Spacing.base },
   backBtn: { marginBottom: 16 },
   headerContent: { alignItems: "center", gap: 10 },
@@ -176,15 +187,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "#fff", fontSize: Typography.xxl, fontWeight: "800" },
-  headerSub: { color: Colors.textSecondary, fontSize: Typography.sm, textTransform: "capitalize" },
+  headerTitle: { color: "#fff", ...Typography.xxl, fontWeight: "800" },
+  headerSub: { ...Typography.sm, textTransform: "capitalize" },
   body: { padding: Spacing.base, gap: Spacing.md },
   loadingBox: { alignItems: "center", paddingVertical: 60, gap: 16 },
-  loadingText: { color: Colors.textSecondary, fontSize: Typography.sm, textAlign: "center" },
+  loadingText: { ...Typography.sm, textAlign: "center" },
   errorBox: { alignItems: "center", paddingVertical: 40, gap: 12 },
-  errorText: { color: Colors.textSecondary, textAlign: "center", fontSize: Typography.sm },
+  errorText: { textAlign: "center", ...Typography.sm },
   retryBtn: { flexDirection: "row", alignItems: "center", gap: 6, padding: 8 },
-  retryText: { color: Colors.primary, fontSize: Typography.sm },
+  retryText: { ...Typography.sm },
   summaryCard: {
     borderRadius: Radius.xl,
     padding: Spacing.base,
@@ -192,13 +203,13 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: "#a855f7",
-    fontSize: Typography.xs,
+    ...Typography.xs,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 8,
   },
-  summaryText: { color: "#fff", fontSize: Typography.md, lineHeight: 24 },
+  summaryText: { color: "#fff", ...Typography.md, lineHeight: 24 },
   motivCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -207,19 +218,17 @@ const styles = StyleSheet.create({
     padding: Spacing.base,
     marginBottom: Spacing.sm,
     borderWidth: 1,
-    borderColor: "rgba(236,72,153,0.2)",
   },
-  motivText: { color: Colors.textPrimary, fontSize: Typography.sm, flex: 1, lineHeight: 20 },
+  motivText: { ...Typography.sm, flex: 1, lineHeight: 20 },
   section: {
-    backgroundColor: Colors.bgCard,
     borderRadius: Radius.xl,
     padding: Spacing.base,
     gap: 10,
     marginBottom: Spacing.sm,
   },
-  sectionTitle: { color: Colors.textPrimary, fontSize: Typography.md, fontWeight: "700", marginBottom: 4 },
+  sectionTitle: { ...Typography.md, fontWeight: "700", marginBottom: 4 },
   itemRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  itemText: { color: Colors.textSecondary, fontSize: Typography.sm, flex: 1, lineHeight: 20 },
+  itemText: { ...Typography.sm, flex: 1, lineHeight: 20 },
   refreshRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -227,5 +236,5 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 16,
   },
-  refreshText: { color: Colors.textMuted, fontSize: Typography.xs },
+  refreshText: { ...Typography.xs },
 });

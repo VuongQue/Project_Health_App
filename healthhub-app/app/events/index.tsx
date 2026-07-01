@@ -34,7 +34,9 @@ function ProgressCard({ item, onCheckIn }: { item: EventRegistrationItem; onChec
   const isGroup   = item.event.scope === "GROUP";
   const today = now.toISOString().slice(0, 10);
   const lastCheck = item.lastCheckInDate?.slice(0, 10);
-  const canCheckIn = isOngoing && item.status !== "cancelled" && item.status !== "completed" && lastCheck !== today;
+  const isManual = (item.event.conditionType ?? "MANUAL") === "MANUAL";
+  // MANUAL: tự động, không cần nút; MEDIA: điều hướng riêng → chỉ hiện nút với WORKOUT/STEPS/WATER
+  const canCheckIn = isOngoing && item.status !== "cancelled" && item.status !== "completed" && lastCheck !== today && !isManual;
 
   const cfg = STATUS_CONFIG[item.status];
   const daysTotal = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400_000));
@@ -109,14 +111,14 @@ function ProgressCard({ item, onCheckIn }: { item: EventRegistrationItem; onChec
           onPress={() => onCheckIn(item.event.id)}
         >
           <CheckCircle size={14} color="white" />
-          <Text style={styles.checkinBtnText}>Check-in hôm nay</Text>
+          <Text style={styles.checkinBtnText}>Xác nhận tiến độ hôm nay</Text>
         </TouchableOpacity>
       )}
 
       {!canCheckIn && isOngoing && item.status !== "cancelled" && item.status !== "completed" && (
         <View style={[styles.checkinDone, { backgroundColor: colors.successBg }]}>
           <CheckCircle size={13} color={colors.success} />
-          <Text style={[styles.checkinDoneText, { color: colors.success }]}>Đã check-in hôm nay</Text>
+          <Text style={[styles.checkinDoneText, { color: colors.success }]}>Đã xác nhận hôm nay</Text>
         </View>
       )}
     </View>
@@ -139,6 +141,26 @@ export default function MyEventsScreen() {
       const res = await eventsApi.myRegistrations();
       const list = Array.isArray(res.data) ? res.data : [];
       setRegistrations(list);
+
+      // MANUAL event: tự động verify khi mở app
+      const now = new Date();
+      const today = now.toISOString().slice(0, 10);
+      const manualPending = list.filter((r) => {
+        const condType = r.event.conditionType ?? "MANUAL";
+        if (condType !== "MANUAL") return false;
+        const start = new Date(r.event.startTime);
+        const end = new Date(r.event.endTime);
+        const isActive = start <= now && end >= now;
+        const lastCheck = r.lastCheckInDate?.slice(0, 10);
+        return isActive && r.status !== "cancelled" && r.status !== "completed" && lastCheck !== today;
+      });
+
+      if (manualPending.length > 0) {
+        await Promise.allSettled(manualPending.map((r) => eventsApi.verifyProgress(r.event.id)));
+        // Reload để cập nhật tiến độ
+        const updated = await eventsApi.myRegistrations();
+        setRegistrations(Array.isArray(updated.data) ? updated.data : list);
+      }
     } catch {} finally {
       setLoading(false);
       setRefreshing(false);
@@ -149,11 +171,11 @@ export default function MyEventsScreen() {
 
   const handleCheckIn = async (eventId: number) => {
     try {
-      await eventsApi.checkIn(eventId);
-      Alert.alert("Check-in thành công!", "Tiến độ của bạn đã được cập nhật.");
+      const res = await eventsApi.verifyProgress(eventId);
+      Alert.alert("", res.data?.message ?? "Xác nhận tiến độ thành công!");
       load();
     } catch (e: any) {
-      Alert.alert("Lỗi", e?.response?.data?.message ?? "Không thể check-in");
+      Alert.alert("Chưa đủ điều kiện", e?.response?.data?.message ?? "Không thể xác nhận tiến độ");
     }
   };
 

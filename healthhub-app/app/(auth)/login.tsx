@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 
 import { TextInputField } from "@/components/auth/TextInputField";
 import authApi from "@/src/api/authApi";
-import { saveToken } from "@/src/utils/tokenStorage";
+import { saveToken, getUserFromToken } from "@/src/utils/tokenStorage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
 import { useColors, Colors, Radius, Spacing, Shadow, sw, sf, SCREEN_W, SCREEN_H } from "@/src/theme";
@@ -45,7 +45,10 @@ export default function LoginScreen() {
       await saveToken(accessToken);
       const saved = await AsyncStorage.getItem("auth_token");
       if (!saved) { setError(t("auth.err_save_session")); return; }
-      const seen = await AsyncStorage.getItem("hasSeenOnboarding");
+      const userInfo = await getUserFromToken();
+      const genericSeen = await AsyncStorage.getItem("hasSeenOnboarding");
+      const userSeen = userInfo?.id ? await AsyncStorage.getItem(`hasSeenOnboarding_${userInfo.id}`) : null;
+      const seen = userSeen || genericSeen;
       router.replace(seen ? "/(tabs)/(personal)" : "/onboarding" as any);
     } catch (err: any) {
       setError(extractMessage(err));

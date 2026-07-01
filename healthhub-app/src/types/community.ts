@@ -27,10 +27,15 @@ export interface PostItem {
   media: string[];
   likeCount: number;
   commentCount: number;
-  userId: {
+  /** Owner user id (string) — dùng để so sánh quyền sở hữu */
+  userId: string;
+  /** Thông tin tác giả đã denormalize từ backend */
+  user?: {
     name: string;
     avatar: string;
   };
+  /** Danh sách userId đã like */
+  likes?: string[];
   createdAt: string;
   commentPreview: CommentPreview[];
 }

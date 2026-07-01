@@ -27,9 +27,9 @@ interface TrendingPost {
 interface TopUser {
   id: number;
   fullName: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   level: number;
-  totalPoints: number;
+  points: number;
 }
 
 interface SuggestedGroup {
@@ -237,7 +237,7 @@ function TopUserCard({ user, rank, colors }: { user: TopUser; rank: number; colo
           <Star size={12} color="#fbbf24" />
           <Text style={[sectionStyles.statText, { color: colors.textMuted }]}>Lv.{user.level}</Text>
           <Flame size={12} color="#f97316" />
-          <Text style={[sectionStyles.statText, { color: colors.textMuted }]}>{user.totalPoints} pts</Text>
+          <Text style={[sectionStyles.statText, { color: colors.textMuted }]}>{user.points} pts</Text>
         </View>
       </View>
     </View>

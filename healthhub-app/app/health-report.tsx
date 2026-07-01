@@ -14,6 +14,7 @@ import * as Sharing from "expo-sharing";
 import axiosClient from "@/src/api/axiosClient";
 import stepsApi from "@/src/api/stepsApi";
 import { waterIntakeApi } from "@/src/api/waterIntakeApi";
+import { useColors, Colors, Radius, Spacing, sf, sw } from "@/src/theme";
 
 interface ReportData {
   user: { fullName: string; level: number; points: number };
@@ -27,6 +28,7 @@ interface ReportData {
 
 export default function HealthReportScreen() {
   const router = useRouter();
+  const colors = useColors();
   const shotRef = useRef<ViewShot>(null);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
@@ -84,8 +86,8 @@ export default function HealthReportScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#3b82f6" size="large" />
+      <View style={[styles.center, { backgroundColor: colors.bgPrimary }]}>
+        <ActivityIndicator color={Colors.primary} size="large" />
       </View>
     );
   }
@@ -94,14 +96,16 @@ export default function HealthReportScreen() {
   const stepsPct = data ? Math.min(data.steps / 10000, 1) : 0;
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.bgPrimary }]}>
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Quay lại</Text>
+          <Text style={[styles.backText, { color: colors.textMuted }]} numberOfLines={1}>
+            ← Quay lại
+          </Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Báo cáo sức khoẻ</Text>
+        <Text style={[styles.header, { color: colors.textPrimary }]}>Báo cáo sức khoẻ</Text>
         <TouchableOpacity
-          style={styles.shareBtn}
+          style={[styles.shareBtn, { backgroundColor: Colors.primary }]}
           onPress={handleShare}
           disabled={sharing}
         >
@@ -109,41 +113,47 @@ export default function HealthReportScreen() {
         </TouchableOpacity>
       </View>
 
-      <ViewShot ref={shotRef} options={{ format: "png", quality: 0.95 }} style={styles.reportCard}>
-        <View style={styles.reportHeader}>
-          <Text style={styles.reportTitle}>HealthHub — Báo cáo hàng ngày</Text>
-          <Text style={styles.reportDate}>{today}</Text>
+      <ViewShot ref={shotRef} options={{ format: "png", quality: 0.95 }} style={[styles.reportCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+        <View style={[styles.reportHeader, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.reportTitle, { color: Colors.primary }]}>HealthHub — Báo cáo hàng ngày</Text>
+          <Text style={[styles.reportDate, { color: colors.textMuted }]}>{today}</Text>
         </View>
 
         <View style={styles.reportUser}>
-          <Text style={styles.reportName}>{data?.user.fullName}</Text>
-          <Text style={styles.reportLevel}>Lv.{data?.user.level} · {data?.user.points} điểm</Text>
+          <Text style={[styles.reportName, { color: colors.textPrimary }]}>{data?.user.fullName}</Text>
+          <Text style={[styles.reportLevel, { color: Colors.warning }]}>
+            Lv.{data?.user.level} · {data?.user.points} điểm
+          </Text>
         </View>
 
         {/* Số bước */}
-        <View style={styles.metricCard}>
-          <Text style={styles.metricTitle}>👟 Số bước chân</Text>
-          <Text style={styles.metricValue}>{(data?.steps ?? 0).toLocaleString()}</Text>
-          <Text style={styles.metricSub}>Mục tiêu: 10.000 bước</Text>
-          <View style={styles.bar}>
-            <View style={[styles.barFill, { width: `${Math.round(stepsPct * 100)}%`, backgroundColor: "#3b82f6" }]} />
+        <View style={[styles.metricCard, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]}>
+          <Text style={[styles.metricTitle, { color: colors.textSecondary }]}>👟 Số bước chân</Text>
+          <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
+            {(data?.steps ?? 0).toLocaleString()}
+          </Text>
+          <Text style={[styles.metricSub, { color: colors.textMuted }]}>Mục tiêu: 10.000 bước</Text>
+          <View style={[styles.bar, { backgroundColor: colors.border }]}>
+            <View style={[styles.barFill, { width: `${Math.round(stepsPct * 100)}%`, backgroundColor: Colors.primary }]} />
           </View>
-          <Text style={styles.metricPct}>{Math.round(stepsPct * 100)}%</Text>
+          <Text style={[styles.metricPct, { color: colors.textMuted }]}>{Math.round(stepsPct * 100)}%</Text>
         </View>
 
         {/* Nước */}
-        <View style={styles.metricCard}>
-          <Text style={styles.metricTitle}>💧 Lượng nước uống</Text>
-          <Text style={styles.metricValue}>{data?.waterMl ?? 0} ml</Text>
-          <Text style={styles.metricSub}>Mục tiêu: {data?.waterGoalMl ?? 2000} ml</Text>
-          <View style={styles.bar}>
-            <View style={[styles.barFill, { width: `${Math.round(waterPct * 100)}%`, backgroundColor: "#06b6d4" }]} />
+        <View style={[styles.metricCard, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]}>
+          <Text style={[styles.metricTitle, { color: colors.textSecondary }]}>💧 Lượng nước uống</Text>
+          <Text style={[styles.metricValue, { color: colors.textPrimary }]}>{data?.waterMl ?? 0} ml</Text>
+          <Text style={[styles.metricSub, { color: colors.textMuted }]}>
+            Mục tiêu: {data?.waterGoalMl ?? 2000} ml
+          </Text>
+          <View style={[styles.bar, { backgroundColor: colors.border }]}>
+            <View style={[styles.barFill, { width: `${Math.round(waterPct * 100)}%`, backgroundColor: Colors.info }]} />
           </View>
-          <Text style={styles.metricPct}>{Math.round(waterPct * 100)}%</Text>
+          <Text style={[styles.metricPct, { color: colors.textMuted }]}>{Math.round(waterPct * 100)}%</Text>
         </View>
 
         <View style={styles.reportFooter}>
-          <Text style={styles.footerText}>Tạo bởi HealthHub</Text>
+          <Text style={[styles.footerText, { color: colors.textMuted }]}>Tạo bởi HealthHub</Text>
         </View>
       </ViewShot>
     </ScrollView>
@@ -151,37 +161,40 @@ export default function HealthReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0A0F1F" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#0A0F1F" },
-  headerRow: { flexDirection: "row", alignItems: "center", padding: 16, paddingBottom: 8 },
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  headerRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: Spacing.base, paddingTop: sw(52), paddingBottom: Spacing.sm,
+  },
   back: { width: 80 },
-  backText: { color: "#94a3b8", fontSize: 14 },
-  header: { flex: 1, color: "white", fontSize: 20, fontWeight: "bold", textAlign: "center" },
-  shareBtn: { backgroundColor: "#2563eb", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  shareBtnText: { color: "white", fontWeight: "600", fontSize: 13 },
+  backText: { fontSize: sf(14) },
+  header: { flex: 1, fontSize: sf(20), fontWeight: "bold", textAlign: "center" },
+  shareBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.md },
+  shareBtnText: { color: "white", fontWeight: "600", fontSize: sf(13) },
 
   reportCard: {
-    margin: 16, backgroundColor: "#0f172a", borderRadius: 20,
-    padding: 24, borderWidth: 1, borderColor: "#334155",
+    margin: Spacing.base, borderRadius: Radius.xxl,
+    padding: Spacing.xl, borderWidth: 1,
   },
-  reportHeader: { marginBottom: 16, borderBottomWidth: 1, borderBottomColor: "#334155", paddingBottom: 12 },
-  reportTitle: { color: "#3b82f6", fontSize: 20, fontWeight: "bold" },
-  reportDate: { color: "#64748b", fontSize: 12, marginTop: 2 },
+  reportHeader: { marginBottom: 16, borderBottomWidth: 1, paddingBottom: 12 },
+  reportTitle: { fontSize: sf(18), fontWeight: "bold" },
+  reportDate: { fontSize: sf(12), marginTop: 2 },
   reportUser: { marginBottom: 16 },
-  reportName: { color: "white", fontSize: 18, fontWeight: "bold" },
-  reportLevel: { color: "#f59e0b", fontSize: 13, marginTop: 2 },
+  reportName: { fontSize: sf(18), fontWeight: "bold" },
+  reportLevel: { fontSize: sf(13), marginTop: 2 },
 
   metricCard: {
-    backgroundColor: "#1e293b", borderRadius: 12, padding: 14,
-    marginBottom: 10, borderWidth: 1, borderColor: "#334155",
+    borderRadius: Radius.lg, padding: 14,
+    marginBottom: 10, borderWidth: 1,
   },
-  metricTitle: { color: "#94a3b8", fontSize: 13, marginBottom: 4 },
-  metricValue: { color: "white", fontSize: 24, fontWeight: "bold" },
-  metricSub: { color: "#64748b", fontSize: 11, marginTop: 2, marginBottom: 6 },
-  bar: { height: 6, backgroundColor: "#334155", borderRadius: 3, overflow: "hidden" },
+  metricTitle: { fontSize: sf(13), marginBottom: 4 },
+  metricValue: { fontSize: sf(24), fontWeight: "bold" },
+  metricSub: { fontSize: sf(11), marginTop: 2, marginBottom: 6 },
+  bar: { height: 6, borderRadius: 3, overflow: "hidden" },
   barFill: { height: "100%", borderRadius: 3, minWidth: 4 },
-  metricPct: { color: "#94a3b8", fontSize: 11, marginTop: 4, textAlign: "right" },
+  metricPct: { fontSize: sf(11), marginTop: 4, textAlign: "right" },
 
   reportFooter: { marginTop: 16, alignItems: "center" },
-  footerText: { color: "#334155", fontSize: 11 },
+  footerText: { fontSize: sf(11) },
 });

@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axiosClient from "@/src/api/axiosClient";
+import { getUserFromToken } from "@/src/utils/tokenStorage";
 import { useTranslation } from "react-i18next";
 import { Colors, Spacing, Radius } from "@/src/theme";
 
@@ -69,10 +70,19 @@ export default function OnboardingScreen() {
     setCurrentSlide(idx);
   };
 
+  const markOnboardingDone = async () => {
+    const userInfo = await getUserFromToken();
+    // Always set the generic key so checks using either key format succeed
+    await AsyncStorage.setItem("hasSeenOnboarding", "true");
+    if (userInfo?.id) {
+      await AsyncStorage.setItem(`hasSeenOnboarding_${userInfo.id}`, "true");
+    }
+    await AsyncStorage.setItem("@tour_pending", "true");
+  };
+
   const handleFinish = async () => {
     setSaving(true);
     try {
-      // Save body metrics if provided
       if (weight || height) {
         const body: any = {};
         if (weight) body.weight = parseFloat(weight);
@@ -80,14 +90,11 @@ export default function OnboardingScreen() {
         if (selectedGoal) body.note = `Mục tiêu: ${selectedGoal}`;
         await axiosClient.post("/body-metrics", body).catch(() => {});
       }
-      // Mark onboarding done + schedule app tour
-      await AsyncStorage.setItem("hasSeenOnboarding", "true");
-      await AsyncStorage.setItem("@tour_pending", "true");
+      await markOnboardingDone();
       router.replace("/(tabs)/(personal)" as any);
     } catch {
       Alert.alert(t("common.error"), t("onboarding.err_save"));
-      await AsyncStorage.setItem("hasSeenOnboarding", "true");
-      await AsyncStorage.setItem("@tour_pending", "true");
+      await markOnboardingDone();
       router.replace("/(tabs)/(personal)" as any);
     } finally {
       setSaving(false);
@@ -95,8 +102,7 @@ export default function OnboardingScreen() {
   };
 
   const handleSkip = async () => {
-    await AsyncStorage.setItem("hasSeenOnboarding", "true");
-    await AsyncStorage.setItem("@tour_pending", "true");
+    await markOnboardingDone();
     router.replace("/(tabs)/(personal)" as any);
   };
 

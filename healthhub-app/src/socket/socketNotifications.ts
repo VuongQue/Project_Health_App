@@ -1,11 +1,12 @@
 import { io, Socket } from "socket.io-client";
 import { getToken } from "@/src/utils/tokenStorage";
+import { API_BASE_URL } from "@/src/config/env";
 
-const NOTI_URL = "http://localhost:4000/notifications";
+const NOTI_URL = `${API_BASE_URL}/notifications`;
 
 export async function createNotificationSocket(): Promise<Socket> {
   let token = await getToken();
-  if (token?.startsWith('"')) token = JSON.parse(token);
+  if (token?.startsWith('"')) { try { token = JSON.parse(token); } catch {} }
 
   const socket = io(NOTI_URL, {
     transports: ["websocket"],

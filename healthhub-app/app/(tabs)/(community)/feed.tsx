@@ -31,6 +31,37 @@ import axiosClient from "@/src/api/axiosClient";
 import { StoryItem, PostItem } from "@/src/types/community";
 import { getUserFromToken } from "@/src/utils/tokenStorage";
 import { simpleCache } from "@/src/utils/simpleCache";
+import adsApi, { Advertisement, AdCategory } from "@/src/api/adsApi";
+import AdCard from "@/components/ads/AdCard";
+
+/** Map health profile data → ad categories để targeting khi post không có keywords */
+function getUserAdCategories(profile: {
+  level?: number;
+  points?: number;
+  dailyGoal?: string | null;
+  totalWorkouts?: number;
+  currentStreak?: number;
+}): AdCategory[] {
+  const cats: AdCategory[] = [];
+  const goal = (profile.dailyGoal ?? "").toLowerCase();
+
+  // Goal-based targeting
+  if (/weight|cân|giảm|lose|fat/.test(goal)) cats.push("nutrition", "supplement");
+  if (/muscle|cơ|tăng|gain|strength|mạnh/.test(goal)) cats.push("supplement", "fitness");
+  if (/run|chạy|cardio|endurance/.test(goal)) cats.push("apparel", "equipment");
+  if (/yoga|thiền|meditat|mindful|relax|stress|thư giãn/.test(goal)) cats.push("wellness");
+  if (/health|sức khoẻ|sức khỏe|fit|lành mạnh/.test(goal)) cats.push("fitness", "nutrition");
+
+  // Workout streak — active trainer → fitness/equipment
+  if ((profile.currentStreak ?? 0) >= 3) cats.push("fitness");
+  if ((profile.totalWorkouts ?? 0) >= 10) cats.push("equipment");
+
+  // High level = experienced user → supplement/equipment (nâng cao)
+  if ((profile.level ?? 1) >= 5) cats.push("supplement");
+
+  // Deduplicate and limit to most relevant
+  return [...new Set(cats)].slice(0, 3) as AdCategory[];
+}
 
 type Tab = "posts" | "events" | "groups";
 
@@ -66,8 +97,16 @@ export default function CommunityFeed() {
   const [posting, setPosting] = useState(false);
   const [unreadNotif, setUnreadNotif] = useState(0);
   const [friendsPosts, setFriendsPosts] = useState<any[]>([]);
+  const [feedAds, setFeedAds] = useState<Advertisement[]>([]);
+  const [dismissedAdIds, setDismissedAdIds] = useState<Set<number>>(new Set());
+  const [userAdProfile, setUserAdProfile] = useState<{
+    level: number; points: number; dailyGoal: string | null;
+    totalWorkouts: number; currentStreak: number;
+  } | null>(null);
   const searchTimer = useRef<any>(null);
+  const postsRef = useRef<PostItem[]>([]);
   const PAGE_SIZE = 10;
+  const AD_EVERY_N_POSTS = 5; // hiển thị 1 ad sau mỗi 5 posts
 
   useEffect(() => {
     (async () => {
@@ -106,13 +145,37 @@ export default function CommunityFeed() {
     if (myAvatar !== undefined) loadStories();
   }, [myAvatar]);
 
+  /** Fetch user health profile → set state, rồi tự trigger loadFeedAds với posts hiện có */
+  const loadUserAdProfile = async () => {
+    try {
+      const cached = simpleCache.get<any>("profile:me");
+      const profileData = cached ?? (await profileApi.getMe()).data;
+      const workoutRes = await axiosClient.get("/fitness/logs/week").catch(() => ({ data: null }));
+      const profile = {
+        level: profileData?.user?.level ?? 1,
+        points: profileData?.user?.points ?? 0,
+        dailyGoal: profileData?.user?.dailyGoal ?? null,
+        totalWorkouts: workoutRes.data?.weekTotal?.workouts ?? 0,
+        currentStreak: profileData?.stats?.currentStreak ?? 0,
+      };
+      setUserAdProfile(profile);
+      // posts là closure ref — dùng functional update pattern không được, nên dùng ref
+      // Đơn giản: gọi lại với rỗng → Layer 2 profile sẽ hoạt động đúng
+      loadFeedAdsWithProfile(postsRef.current.map((p: any) => p.content ?? ""), profile);
+    } catch {}
+  };
+
   const loadFeed = async (reset = true) => {
     try {
       if (reset) setLoading(true);
       const res = await communityApi.getFeed(1, PAGE_SIZE);
-      setPosts(res.posts ?? []);
+      const postList = res.posts ?? [];
+      setPosts(postList);
+      postsRef.current = postList;
       setPage(1);
-      setHasMore((res.posts?.length ?? 0) >= PAGE_SIZE);
+      setHasMore(postList.length >= PAGE_SIZE);
+      // Pass userAdProfile hiện tại (có thể null nếu chưa load xong — profile sẽ re-trigger sau)
+      loadFeedAdsWithProfile(postList.map((p: any) => p.content ?? ""), userAdProfile);
     } catch (e) {
       console.log("Feed error", e);
     } finally {
@@ -201,12 +264,46 @@ export default function CommunityFeed() {
     } catch {}
   };
 
+  const loadFeedAdsWithProfile = async (
+    postContents: string[] = [],
+    profile: typeof userAdProfile,
+  ) => {
+    try {
+      // Layer 1: keyword scan từ nội dung post
+      const combined = postContents.join(" ").toLowerCase();
+      const keywordCats: AdCategory[] = [];
+      if (/protein|whey|supplement|vitamin|bổ sung/.test(combined)) keywordCats.push("supplement");
+      if (/ăn|calo|dinh dưỡng|thực phẩm|bữa/.test(combined)) keywordCats.push("nutrition");
+      if (/tập|gym|workout|exercise|bài tập/.test(combined)) keywordCats.push("fitness");
+      if (/thiền|yoga|stress|thư giãn/.test(combined)) keywordCats.push("wellness");
+      if (/giày|quần|áo|trang phục|apparel/.test(combined)) keywordCats.push("apparel");
+      if (/dụng cụ|thiết bị|equipment|máy/.test(combined)) keywordCats.push("equipment");
+
+      // Layer 2: user health profile fallback (khi post không có keywords)
+      const profileCats: AdCategory[] =
+        keywordCats.length === 0 && profile
+          ? getUserAdCategories(profile)
+          : [];
+
+      // Layer 3: round-robin — không filter category → backend trả priority cao nhất + RAND()
+      const finalCats = keywordCats.length > 0
+        ? keywordCats
+        : profileCats.length > 0
+          ? profileCats
+          : undefined;
+
+      const res = await adsApi.getActive("feed", finalCats);
+      setFeedAds(res.data ?? []);
+    } catch {}
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadFeed();
       loadEvents();
       loadGroups();
       loadFriendsPosts();
+      loadUserAdProfile();
     }, [])
   );
 
@@ -585,9 +682,28 @@ export default function CommunityFeed() {
         <FlatList
           data={activeTab === "posts" ? posts : []}
           keyExtractor={(p) => p._id}
-          renderItem={({ item }) => (
-            <PostCard post={item} refresh={loadFeed} currentUserId={currentUserId} />
-          )}
+          renderItem={({ item, index }) => {
+            const showAd = activeTab === "posts"
+              && feedAds.length > 0
+              && (index + 1) % AD_EVERY_N_POSTS === 0;
+            const adIndex = Math.floor((index + 1) / AD_EVERY_N_POSTS - 1) % feedAds.length;
+            const ad = showAd ? feedAds[adIndex] : null;
+            const isDismissed = ad ? dismissedAdIds.has(ad.id) : false;
+            return (
+              <>
+                <PostCard post={item} refresh={loadFeed} currentUserId={currentUserId} />
+                {ad && !isDismissed && (
+                  <View style={{ paddingHorizontal: Spacing.base }}>
+                    <AdCard
+                      ad={ad}
+                      variant="compact"
+                      onDismiss={() => setDismissedAdIds((prev) => new Set(prev).add(ad.id))}
+                    />
+                  </View>
+                )}
+              </>
+            );
+          }}
           ListHeaderComponent={<ListHeader />}
           ListFooterComponent={<ListFooter />}
           ListEmptyComponent={

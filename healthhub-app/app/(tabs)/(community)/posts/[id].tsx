@@ -70,8 +70,8 @@ export default function PostDetailScreen() {
   }
 
   const avatarUrl =
-    post.userId?.avatar ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(post.userId?.name ?? "User")}`;
+    post.user?.avatar ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(post.user?.name ?? "User")}`;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bgSecondary }]}>
@@ -92,7 +92,7 @@ export default function PostDetailScreen() {
         <View style={styles.authorRow}>
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           <View>
-            <Text style={[styles.author, { color: colors.textPrimary }]}>{post.userId?.name}</Text>
+            <Text style={[styles.author, { color: colors.textPrimary }]}>{post.user?.name ?? "User"}</Text>
             <Text style={[styles.time, { color: colors.textMuted }]}>
               {new Date(post.createdAt).toDateString()}
             </Text>

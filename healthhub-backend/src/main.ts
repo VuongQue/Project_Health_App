@@ -9,7 +9,7 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { randomUUID } from 'crypto';
 
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000,http://localhost:5173')
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000,http://localhost:5173,http://localhost:8081')
   .split(',')
   .map((o) => o.trim());
 
@@ -19,7 +19,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: appLogger,
     bufferLogs: true,
+    bodyParser: true,
   });
+
+  app.use(require('express').json({ limit: '10mb' }));
+  app.use(require('express').urlencoded({ limit: '10mb', extended: true }));
 
   // Gắn x-request-id vào mỗi request để trace log theo request
   app.use((req: any, _res: any, next: () => void) => {

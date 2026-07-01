@@ -54,15 +54,18 @@ function typeToTab(type: string): TabKey {
 export default function NotificationsScreen() {
   const router = useRouter();
   const colors = useColors();
-  const { isDark } = useTheme();
+  useTheme();
   const { notifications, loading, unreadCount, clearAll, markAllAsRead, markAsRead, refresh } = useNotifications();
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await refresh();
-    setRefreshing(false);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const filtered = activeTab === "all"

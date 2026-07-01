@@ -30,12 +30,101 @@ export interface UserHealthContext {
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly genAI: GoogleGenerativeAI;
-  private readonly model: string = 'gemini-3.1-flash-lite';
+  private readonly modelChain: string[] = [
+    'gemini-2.0-flash',       // primary — free tier, fast
+    'gemini-2.5-flash',       // fallback 1
+    'gemini-1.5-flash',       // fallback 2
+    'gemini-1.5-flash-8b',    // fallback 3 — lightest
+  ];
 
   constructor(private readonly config: ConfigService) {
     this.genAI = new GoogleGenerativeAI(
       this.config.get<string>('GEMINI_API_KEY') ?? '',
     );
+  }
+
+  // Tự động fallback sang model tiếp theo khi gặp 429 quota exceeded
+  private async generateWithFallback(
+    promptOrParts: string | any[],
+    systemInstruction?: string,
+  ): Promise<string> {
+    let lastError: any;
+    for (const model of this.modelChain) {
+      try {
+        const geminiModel = this.genAI.getGenerativeModel({
+          model,
+          ...(systemInstruction ? { systemInstruction } : {}),
+        });
+        const result = await geminiModel.generateContent(promptOrParts as any);
+        if (model !== this.modelChain[0]) {
+          this.logger.warn(`[AI] Using fallback model: ${model}`);
+        }
+        return result.response.text();
+      } catch (err: any) {
+        if (this.isRetryableError(err)) {
+          this.logger.warn(`[AI] Model ${model} unavailable (${this.getErrCode(err)}), trying next...`);
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+    this.logger.error('[AI] All models exhausted');
+    throw lastError;
+  }
+
+  private isRetryableError(err: any): boolean {
+    const status = err?.status ?? err?.httpStatus;
+    if (status === 429 || status === 404 || status === 503) return true;
+    const msg: string = err?.message ?? '';
+    return (
+      msg.includes('429') ||
+      msg.includes('404') ||
+      msg.includes('quota') ||
+      msg.includes('Too Many Requests') ||
+      msg.includes('credits are depleted') ||
+      msg.includes('is not found') ||
+      msg.includes('not supported') ||
+      msg.includes('503') ||
+      msg.includes('overloaded')
+    );
+  }
+
+  private getErrCode(err: any): string {
+    const status = err?.status ?? err?.httpStatus;
+    if (status) return String(status);
+    if (err?.message?.includes('404') || err?.message?.includes('is not found')) return '404';
+    if (err?.message?.includes('429') || err?.message?.includes('quota')) return '429';
+    return 'unknown';
+  }
+
+  // Fallback cho chat (streaming / startChat không dùng được generateContent)
+  private async chatWithFallback(
+    systemInstruction: string,
+    history: any[],
+    lastMessage: string,
+  ): Promise<string> {
+    let lastError: any;
+    for (const model of this.modelChain) {
+      try {
+        const geminiModel = this.genAI.getGenerativeModel({ model, systemInstruction });
+        if (model !== this.modelChain[0]) {
+          this.logger.warn(`[AI] Chat using fallback model: ${model}`);
+        }
+        const chat = geminiModel.startChat({ history });
+        const result = await chat.sendMessage(lastMessage);
+        return result.response.text();
+      } catch (err: any) {
+        if (this.isRetryableError(err)) {
+          this.logger.warn(`[AI] Chat model ${model} unavailable (${this.getErrCode(err)}), trying next...`);
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+    this.logger.error('[AI] All chat models exhausted');
+    throw lastError;
   }
 
   // ─────────────────────────────────────────────
@@ -44,13 +133,9 @@ export class AiService {
   async chat(
     context: UserHealthContext,
     messages: { role: 'user' | 'assistant'; content: string }[],
+    sponsoredAds?: { title: string; brandName: string; description: string | null; ctaText: string }[],
   ): Promise<string> {
-    const systemPrompt = this.buildCoachSystemPrompt(context);
-
-    const geminiModel = this.genAI.getGenerativeModel({
-      model: this.model,
-      systemInstruction: systemPrompt,
-    });
+    const systemPrompt = this.buildCoachSystemPrompt(context, sponsoredAds);
 
     // Gemini dùng 'model' thay vì 'assistant', history phải bắt đầu bằng 'user'
     const allButLast = messages.slice(0, -1).map((m) => ({
@@ -62,9 +147,7 @@ export class AiService {
 
     const lastMessage = messages[messages.length - 1];
     try {
-      const chat = geminiModel.startChat({ history });
-      const result = await chat.sendMessage(lastMessage?.content ?? '');
-      return result.response.text();
+      return await this.chatWithFallback(systemPrompt, history, lastMessage?.content ?? '');
     } catch (err) {
       this.logger.error('[AI] chat error', err);
       throw err;
@@ -105,9 +188,7 @@ Trả về JSON với format (KHÔNG có markdown/backtick):
   "motivationalMessage": "1 câu động viên ngắn gọn bằng tiếng Việt"
 }`;
 
-    const geminiModel = this.genAI.getGenerativeModel({ model: this.model });
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
+    const text = await this.generateWithFallback(prompt);
 
     try {
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -158,9 +239,7 @@ Calo còn lại trong ngày: ${remaining} kcal (đã ăn ${caloriesConsumedToday
   "suggestions": ["<gợi ý 1>", "<gợi ý 2>"]
 }`;
 
-    const geminiModel = this.genAI.getGenerativeModel({ model: this.model });
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
+    const text = await this.generateWithFallback(prompt);
 
     try {
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -218,9 +297,7 @@ Trả về JSON (KHÔNG có markdown):
   "tips": ["<mẹo 1>", "<mẹo 2>", "<mẹo 3>"]
 }`;
 
-    const geminiModel = this.genAI.getGenerativeModel({ model: this.model });
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
+    const text = await this.generateWithFallback(prompt);
 
     try {
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -281,9 +358,7 @@ Trả về JSON (KHÔNG có markdown):
   "motivationalMessage": "<1 câu động viên ngắn gọn>"
 }`;
 
-    const geminiModel = this.genAI.getGenerativeModel({ model: this.model });
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
+    const text = await this.generateWithFallback(prompt);
 
     try {
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -423,11 +498,6 @@ Trả về JSON (KHÔNG có markdown):
   ): Promise<{ reply: string; suggestions: string[] }> {
     const systemPrompt = this.buildCompanionSystemPrompt(context, screen);
 
-    const geminiModel = this.genAI.getGenerativeModel({
-      model: this.model,
-      systemInstruction: systemPrompt,
-    });
-
     const geminiHistory = history.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
@@ -436,9 +506,7 @@ Trả về JSON (KHÔNG có markdown):
     const validHistory = firstUserIdx >= 0 ? geminiHistory.slice(firstUserIdx) : [];
 
     try {
-      const chat = geminiModel.startChat({ history: validHistory });
-      const result = await chat.sendMessage(message);
-      const text = result.response.text();
+      const text = await this.chatWithFallback(systemPrompt, validHistory, message);
 
       // Tách reply và suggestions nếu có format JSON
       try {
@@ -486,9 +554,7 @@ Trả về JSON (KHÔNG có markdown):
   "suggestions": ["<hoạt động gợi ý 1>", "<hoạt động gợi ý 2>", "<hoạt động gợi ý 3>"]
 }`;
 
-    const geminiModel = this.genAI.getGenerativeModel({ model: this.model });
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
+    const text = await this.generateWithFallback(prompt);
 
     try {
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -505,7 +571,10 @@ Trả về JSON (KHÔNG có markdown):
   // ─────────────────────────────────────────────
   // Helper: build system prompt cho coach
   // ─────────────────────────────────────────────
-  private buildCoachSystemPrompt(ctx: UserHealthContext): string {
+  private buildCoachSystemPrompt(
+    ctx: UserHealthContext,
+    sponsoredAds?: { title: string; brandName: string; description: string | null; ctaText: string }[],
+  ): string {
     const moodText = ctx.mood ? `${ctx.mood.score}/5 (${ctx.mood.label})` : 'chưa ghi hôm nay';
     const bmiText = ctx.bodyMetrics?.bmi ? `BMI ${ctx.bodyMetrics.bmi}` : '';
 
@@ -542,7 +611,11 @@ Nguyên tắc:
 3. Không đưa ra chẩn đoán y tế — chỉ tư vấn lối sống lành mạnh
 4. Khuyến khích tích cực, không phán xét
 5. Khi cần thông tin thêm, hỏi người dùng
-6. Cuối mỗi lần tư vấn liên quan đến triệu chứng/bệnh lý, nhắc nhở: "Đây chỉ là thông tin tham khảo, bạn nên gặp bác sĩ để được tư vấn chính xác nhất."`;
+6. Cuối mỗi lần tư vấn liên quan đến triệu chứng/bệnh lý, nhắc nhở: "Đây chỉ là thông tin tham khảo, bạn nên gặp bác sĩ để được tư vấn chính xác nhất."${
+  sponsoredAds && sponsoredAds.length > 0
+    ? `\n\n--- ĐỐI TÁC ---\nCác sản phẩm sau được đối tác của HealthHub giới thiệu. Nếu câu hỏi của người dùng liên quan tự nhiên đến các sản phẩm này, bạn CÓ THỂ đề cập nhẹ nhàng ở cuối câu trả lời với dòng "[Được tài trợ] ..." — nhưng KHÔNG bắt buộc, KHÔNG thần thánh hoá, KHÔNG tạo urgency (không dùng "mua ngay", "giảm giá", "hạn chế"). Chỉ khuyến khích xem thử nếu thực sự phù hợp.\n${sponsoredAds.map((a) => `• ${a.brandName} — ${a.title}${a.description ? `: ${a.description}` : ''} (CTA: "${a.ctaText}")`).join('\n')}`
+    : ''
+}`;
   }
 
   private buildCompanionSystemPrompt(ctx: UserHealthContext, screen?: string): string {
@@ -614,13 +687,11 @@ Yêu cầu:
 Hãy lắng nghe và ghi lại chính xác những gì người dùng nói về bữa ăn của họ.`;
 
     try {
-      const geminiModel = this.genAI.getGenerativeModel({ model: this.model });
-      const result = await geminiModel.generateContent([
+      const transcript = await this.generateWithFallback([
         { inlineData: { mimeType, data: audioBase64 } },
         { text: prompt },
       ]);
-      const transcript = result.response.text().trim();
-      return { transcript };
+      return { transcript: transcript.trim() };
     } catch (err) {
       this.logger.error('[AI] transcribeMealVoice error', err);
       throw err;
@@ -662,9 +733,7 @@ Các trường hợp KHÔNG TOXIC (isToxic=false):
 Chỉ trả về JSON thuần, không thêm markdown.`;
 
     try {
-      const geminiModel = this.genAI.getGenerativeModel({ model: this.model });
-      const result = await geminiModel.generateContent(prompt);
-      const raw = result.response.text().trim().replace(/```json\n?/g, '').replace(/```\n?/g, '');
+      const raw = (await this.generateWithFallback(prompt)).trim().replace(/```json\n?/g, '').replace(/```\n?/g, '');
       const parsed = JSON.parse(raw);
       return {
         isToxic: Boolean(parsed.isToxic),

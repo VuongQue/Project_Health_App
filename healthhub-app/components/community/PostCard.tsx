@@ -67,9 +67,9 @@ export function PostCard({ post, refresh, currentUserId }: Props) {
   const heartAnim = useRef(new Animated.Value(0)).current;
   const lastTap = useRef<number>(0);
 
-  const authorName = post.user?.name ?? post.userId?.name ?? "User";
-  const avatarUrl = post.user?.avatar ?? post.userId?.avatar ?? null;
-  const isOwner = currentUserId && post.userId === currentUserId;
+  const authorName = post.user?.name ?? "User";
+  const avatarUrl = post.user?.avatar ?? null;
+  const isOwner = currentUserId != null && post.userId === currentUserId;
 
   const doLike = async () => {
     if (liking) return;

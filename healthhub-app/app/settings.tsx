@@ -65,9 +65,9 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, { paddingTop: 52 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={[styles.backText, { color: colors.textSub }]}>{t("settings.back")}</Text>
+          <Text style={[styles.backText, { color: colors.textSub }]} numberOfLines={1}>{t("settings.back")}</Text>
         </TouchableOpacity>
         <Text style={[styles.header, { color: colors.text }]}>{t("settings.title")}</Text>
         <View style={{ width: 60 }} />
@@ -184,7 +184,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerRow: { flexDirection: "row", alignItems: "center", padding: 16, paddingBottom: 8 },
-  back: { width: 60 },
+  back: { width: 70 },
   backText: { fontSize: 14 },
   header: { flex: 1, fontSize: 20, fontWeight: "bold", textAlign: "center" },
   section: { fontSize: 11, fontWeight: "600", letterSpacing: 1, paddingHorizontal: 16, marginTop: 16, marginBottom: 6 },

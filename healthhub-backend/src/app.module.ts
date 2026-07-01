@@ -35,6 +35,7 @@ import { StepsModule } from './modules/steps/steps.module';
 import { AiModule } from './modules/ai/ai.module';
 import { HealthJourneyModule } from './modules/health-journey/health-journey.module';
 import { WearableHealthModule } from './modules/wearable-health/wearable-health.module';
+import { AdvertisementModule } from './modules/advertisement/advertisement.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { WearableHealthModule } from './modules/wearable-health/wearable-health.
     AiModule,
     HealthJourneyModule,
     WearableHealthModule,
+    AdvertisementModule,
   ],
   providers: [AdminSeedService],
 })

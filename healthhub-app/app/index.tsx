@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getToken } from "@/src/utils/tokenStorage";
+import { getToken, getUserFromToken } from "@/src/utils/tokenStorage";
 import { View, ActivityIndicator } from "react-native";
 import { Colors } from "@/src/theme";
 
@@ -17,7 +17,10 @@ export default function Index() {
         setReady(true);
         return;
       }
-      const seen = await AsyncStorage.getItem("hasSeenOnboarding");
+      const userInfo = await getUserFromToken();
+      const genericSeen = await AsyncStorage.getItem("hasSeenOnboarding");
+      const userSeen = userInfo?.id ? await AsyncStorage.getItem(`hasSeenOnboarding_${userInfo.id}`) : null;
+      const seen = userSeen || genericSeen;
       if (!seen) {
         setTarget("/onboarding");
       } else {

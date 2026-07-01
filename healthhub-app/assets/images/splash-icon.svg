@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Splash — white heart + blue ECG, transparent bg (gradient from app.json) -->
+
+  <!-- Heart (white) -->
+  <path d="
+    M512 720
+    C500 708 285 572 220 415
+    C190 340 198 238 278 195
+    C325 172 385 180 428 210
+    C462 232 490 266 512 298
+    C534 266 562 232 596 210
+    C639 180 699 172 746 195
+    C826 238 834 340 804 415
+    C739 572 524 708 512 720 Z
+  "
+  fill="white"
+  opacity="0.95"
+  />
+
+  <!-- ECG line (brand blue) inside heart -->
+  <polyline
+    points="290,450  350,450  382,385  418,530  452,320  488,510  520,450  734,450"
+    fill="none"
+    stroke="#1A7FE8"
+    stroke-width="30"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- App name -->
+  <text x="512" y="890"
+        text-anchor="middle"
+        font-family="Arial Rounded MT Bold, Helvetica Neue, Arial, sans-serif"
+        font-size="86"
+        font-weight="bold"
+        letter-spacing="4"
+        fill="white"
+        opacity="0.95">HealthHub</text>
+
+  <!-- Tagline -->
+  <text x="512" y="958"
+        text-anchor="middle"
+        font-family="Helvetica Neue, Arial, sans-serif"
+        font-size="32"
+        letter-spacing="4"
+        fill="rgba(255,255,255,0.65)">YOUR HEALTH COMPANION</text>
+</svg>
